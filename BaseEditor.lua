@@ -239,7 +239,7 @@ local function player_built_underground_entity(player_index, stack)
   end
 end
 
-function BaseEditor:on_player_built_entity(event)
+function BaseEditor:on_built_entity(event)
   local player_index = event.player_index
   local entity = event.created_entity
   if not entity.valid or entity.name == "entity-ghost" then return end
@@ -302,7 +302,76 @@ function BaseEditor:on_player_mined_entity(event)
 end
 
 ---------------------------------------------------------------------------------------------------
--- Blueprint and ghost handling
+-- Blueprint capture
+
+local function find_in_area(args)
+  local area = args.area
+  if area.left_top.x >= area.right_bottom.x or area.left_top.y >= area.right_bottom.y then
+    args.position = area.left_top
+    args.area = nil
+  end
+  local surface = args.surface
+  args.surface = nil
+  return surface.find_entities_filtered(args)
+end
+
+local function bp_position_transforms(bp_entities, surface, area)
+  local bp_anchor = bp_entities[1]
+  local world_anchor = find_in_area{surface = surface, area = area, name = bp_anchor.name, limit = 1}[1]
+  if not world_anchor then return nil end
+
+  local x_offset = world_anchor.position.x - bp_anchor.position.x
+  local y_offset = world_anchor.position.y - bp_anchor.position.y
+  local bp_to_world = function(p)
+    return { x = p.x + x_offset, y = p.y + y_offset }
+  end
+  local world_to_bp = function(p)
+    return { x = p.x - x_offset, y = p.y - y_offset }
+  end
+
+  return bp_to_world, world_to_bp
+end
+
+function BaseEditor:capture_underground_entities_in_blueprint(event)
+  local player = game.players[event.player_index]
+  local bp_surface = player.surface
+  local underground_surface = editor_surface(self, bp_surface)
+
+  local bp = player.blueprint_to_setup
+  if not bp or not bp.valid_for_read then bp = player.cursor_stack end
+  local bp_entities = bp.get_blueprint_entities()
+  if not bp_entities or not next(bp_entities) then return end
+  local area = event.area
+
+  local _, world_to_bp = bp_position_transforms(bp_entities, bp_surface, area)
+
+  local ug_entities = find_in_area{surface = underground_surface, area = area}
+  for _, ug_entity in ipairs(ug_entities) do
+    if ug_entity.name ~= "entity-ghost" then
+      local name_in_bp = self.name.."-bpproxy-"..ug_entity.name
+      local entity_type = ug_entity.type
+
+      local bp_entity = {
+        entity_number = #bp_entities + 1,
+        name = name_in_bp,
+        position = world_to_bp(ug_entity.position),
+        direction = ug_entity.direction,
+      }
+
+      if entity_type == "underground-belt" then
+        bp_entity.type = ug_entity.belt_to_ground_type
+      elseif entity_type == "loader" then
+        bp_entity.type = ug_entity.loader_type
+      end
+
+      bp_entities[#bp_entities + 1] = bp_entity
+    end
+  end
+  bp.set_blueprint_entities(bp_entities)
+end
+
+---------------------------------------------------------------------------------------------------
+-- Ghost management
 
 
 

@@ -85,6 +85,30 @@ local function export_mocks(env, args)
   }
   entity_prototypes.validentity.items_to_place_this[1] = item_prototypes.validitem
 
+  nauvis.find_entities_filtered = function()
+    return {
+      {
+        valid = true,
+        name = "validentity",
+        position = {x=4, y=4},
+        prototype = game.entity_prototypes.validentity,
+        surface = nauvis,
+      }
+    }
+  end
+
+  local editor_entity = {
+    valid = true,
+    name = "validentity",
+    position = {x=2, y=2},
+    prototype = entity_prototypes.validentity,
+    surface = editor_surface,
+  }
+
+  editor_surface.find_entities_filtered = spy.new(function()
+    return { editor_entity }
+  end)
+
   local game
   game = {
     autoplace_control_prototypes = {
@@ -101,13 +125,6 @@ local function export_mocks(env, args)
   }
   env.game = game
 
-  local validentity = {
-    valid = true,
-    name = "validentity",
-    prototype = game.entity_prototypes.validentity,
-    surface = editor_surface,
-  }
-
   spy.on(game, "create_surface")
 
   if args and args.create_editor_surface then
@@ -119,7 +136,7 @@ local function export_mocks(env, args)
     character = mock(character),
     game = game,
     player = player,
-    validentity = validentity,
+    editor_entity = editor_entity,
   }
 end
 
@@ -222,7 +239,7 @@ describe("A BaseEditor", function()
       uut:toggle_editor_status_for_player(1)
       uut:on_player_mined_entity{
         player_index = 1,
-        entity = mocks.validentity,
+        entity = mocks.editor_entity,
         buffer = mocks.buffer,
       }
       assert.is(mocks.buffer.count, 0)
@@ -244,13 +261,93 @@ describe("A BaseEditor", function()
 
     it("works around upgrade-planner#10", function()
       uut:toggle_editor_status_for_player(1)
-      uut:on_player_built_entity{
+      uut:on_built_entity{
         mod_name = "upgrade-planner",
         player_index = 1,
-        created_entity = mocks.validentity,
+        created_entity = mocks.editor_entity,
         stack = { name = "upgrade-planner", count = 1 },
       }
       assert.spy(c.remove_item).was.called_with{ name = "validitem", count = 1 }
+    end)
+  end)
+
+  describe("captures underground entities as bpproxies in blueprints", function()
+    local bp = {
+      valid = true,
+      valid_for_read = true,
+      get_blueprint_entities = function()
+        return {
+          {
+            entity_number = 1,
+            name = "validentity",
+            position = {x=0, y=0},
+          }
+        }
+      end,
+      set_blueprint_entities = function() end,
+    }
+    spy.on(bp, "set_blueprint_entities")
+
+    it("translates position correctly", function()
+      p.blueprint_to_setup = bp
+      local area = { left_top = {x=-10, y=-10}, right_bottom = {x=10, y=10} }
+      uut:capture_underground_entities_in_blueprint{ player_index = 1, area = area }
+      assert.spy(game.surfaces.testeditor.find_entities_filtered).was.called_with{ area = area }
+      assert.spy(bp.set_blueprint_entities).was.called_with{
+        {
+          entity_number = 1,
+          name = "validentity",
+          position = {x=0, y=0},
+        },
+        {
+          entity_number = 2,
+          name = "testeditor-bpproxy-validentity",
+          -- anchor at 4,4, underground entity at 2,2, relative offset to anchor is -2,-2
+          position = {x=-2, y=-2},
+        },
+      }
+    end)
+  end)
+
+  describe("manages ghosts", function()
+    describe("new ghost creation", function()
+      it("places underground ghosts when aboveground bpproxy ghosts are placed", function()
+        pending("implementation of test")
+      end)
+
+      it("destroys newly placed aboveground bpproxy ghosts if underground is blocked", function()
+        pending("implementation of test")
+      end)
+
+      it("places aboveground bpproxy ghosts when underground ghosts are placed", function()
+        pending("implementation of test")
+      end)
+    end)
+
+    describe("ghost removal", function()
+      describe("destroys aboveground ghosts when underground ghosts are removed", function()
+        it("by mining", function()
+          pending("implementation of test")
+        end)
+
+        it("by deconstruction planner", function()
+          pending("implementation of test")
+        end)
+
+        it("by placing an entity", function()
+          pending("implementation of test")
+        end)
+      end)
+
+      describe("destroys underground ghosts when aboveground ghosts are removed", function()
+        it("by mining", function()
+          pending("implementation of test")
+        end)
+
+        it("by deconstruction planner", function()
+          pending("implementation of test")
+        end)
+      end)
     end)
   end)
 end)
