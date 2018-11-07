@@ -1,0 +1,4 @@
+exclude = { 
+  "^/usr/local/share/lua/.*",
+  ".*_spec",
+}
