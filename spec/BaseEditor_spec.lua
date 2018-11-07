@@ -2,6 +2,13 @@ require "busted"
 local serpent = require "serpent"
 
 local function export_mocks(env, args)
+  local defines = {
+    build_check_type = {
+      ghost_type = {},
+    },
+  }
+  env.defines = defines
+
   local nauvis = {
     name = "nauvis",
     spill_item_stack = function() end,
@@ -135,25 +142,31 @@ local function export_mocks(env, args)
     buffer = mock(buffer),
     character = mock(character),
     game = game,
+    nauvis = nauvis,
     player = player,
     editor_entity = editor_entity,
+    editor_surface = editor_surface,
   }
 end
 
 _G.global = {}
 
-local BaseEditor = require "BaseEditor"
-BaseEditor.on_init()
-
 describe("A BaseEditor", function()
+  local BaseEditor
   local mocks
   local c
   local g
   local p
   local uut
+  local editor_surface
   before_each(function()
+    package.loaded["BaseEditor"] = nil
+    BaseEditor = require "BaseEditor"
+    BaseEditor.on_init()
+
     mocks = export_mocks(_G, {create_editor_surface = true})
     g, p, c = mocks.game, mocks.player, mocks.player.character
+    editor_surface = mocks.editor_surface
     uut = BaseEditor.new("testeditor")
     uut.valid_editor_types[1] = "validtype"
   end)
@@ -310,17 +323,91 @@ describe("A BaseEditor", function()
   end)
 
   describe("manages ghosts", function()
+    local surface_ghost = {
+      valid = true,
+      surface = mocks.nauvis,
+      name = "entity-ghost",
+      type = "entity-ghost",
+      ghost_name = "testeditor-bpproxy-validentity",
+      ghost_type = "validtype",
+      position = {x=0, y=0},
+      force = "player",
+      direction = 0,
+      destroy = stub(),
+    }
+    local editor_ghost = {
+      valid = true,
+      surface = editor_surface,
+      name = "entity-ghost",
+      type = "entity-ghost",
+      ghost_name = "validentity",
+      ghost_type = "validtype",
+      position = {x=0, y=0},
+      force = "player",
+      direction = 0,
+      destroy = stub(),
+    }
     describe("new ghost creation", function()
       it("places underground ghosts when aboveground bpproxy ghosts are placed", function()
-        pending("implementation of test")
+        editor_surface.find_entity = spy.new(function() return nil end)
+        editor_surface.can_place_entity = spy.new(function() return true end)
+        editor_surface.create_entity = spy.new(function() return editor_ghost end)
+
+        uut:on_built_entity{
+          player_index = 1,
+          created_entity = surface_ghost,
+        }
+
+        assert.spy(editor_surface.can_place_entity).was.called_with{
+          name = "validentity",
+          position = {x=0, y=0},
+          force = "player",
+          direction = 0,
+          build_check_type = _G.defines.build_check_type.ghost_place,
+        }
+        assert.spy(editor_surface.create_entity).was.called_with{
+          name = "entity-ghost",
+          inner_name = "validentity",
+          position = {x=0, y=0},
+          force = "player",
+          direction = 0,
+        }
       end)
 
       it("destroys newly placed aboveground bpproxy ghosts if underground is blocked", function()
-        pending("implementation of test")
+        editor_surface.find_entity = spy.new(function() return nil end)
+        editor_surface.can_place_entity = spy.new(function() return false end)
+
+        uut:on_built_entity{
+          player_index = 1,
+          created_entity = surface_ghost,
+        }
+
+        assert.spy(editor_surface.can_place_entity).was.called_with{
+          name = "validentity",
+          position = {x=0, y=0},
+          force = "player",
+          direction = 0,
+          build_check_type = _G.defines.build_check_type.ghost_place,
+        }
+        assert.stub(surface_ghost.destroy).was.called()
       end)
 
       it("places aboveground bpproxy ghosts when underground ghosts are placed", function()
-        pending("implementation of test")
+        local nauvis = g.surfaces.nauvis
+        nauvis.find_entity = stub()
+        nauvis.create_entity = spy.new(function() return surface_ghost end)
+        uut:on_built_entity{
+          player_index = 1,
+          created_entity = editor_ghost,
+        }
+        assert.spy(nauvis.create_entity).was.called_with{
+          name = "entity-ghost",
+          inner_name = "testeditor-bpproxy-validentity",
+          position = {x=0, y=0},
+          direction = 0,
+          force = "player",
+        }
       end)
     end)
 

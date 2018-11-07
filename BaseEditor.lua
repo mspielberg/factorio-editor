@@ -9,6 +9,7 @@ function BaseEditor:is_valid_aboveground_surface(surface)
 end
 
 ---------------------------------------------------------------------------------------------------
+-- surface handling
 
 local function editor_autoplace_control()
   for control in pairs(game.autoplace_control_prototypes) do
@@ -50,7 +51,7 @@ local function create_editor_surface(self, name)
 end
 
 local _editor_surface_cache = {}
-local function editor_surface(self, aboveground_surface)
+local function editor_surface_for_aboveground_surface(self, aboveground_surface)
   local underground_surface = _editor_surface_cache[aboveground_surface]
   if not underground_surface then
     local underground_surface_name = editor_surface_name(self, aboveground_surface.name)
@@ -81,7 +82,47 @@ local function is_editor_surface(self, surface)
   return surface.name:find("^"..self.name) ~= nil
 end
 
-local player_state
+---------------------------------------------------------------------------------------------------
+-- player/character handling
+
+local function move_player_to_editor(self, player)
+  local success = player.clean_cursor()
+  if not success then return end
+  local player_index = player.index
+  local underground_surface = editor_surface_for_aboveground_surface(self, player.surface)
+  self.player_state[player_index] = {
+    position = player.position,
+    surface = player.surface,
+    character = player.character,
+  }
+  player.character = nil
+  player.teleport(player.position, underground_surface)
+end
+
+local function return_player_from_editor(self, player)
+  local player_index = player.index
+  local state = self.player_state[player_index]
+  player.teleport(state.position, state.surface)
+  if state.character then
+    player.character = state.character
+  end
+  self.player_state[player_index] = nil
+end
+
+function BaseEditor:toggle_editor_status_for_player(player_index)
+  local player = game.players[player_index]
+  local surface = player.surface
+  if is_editor_surface(self, surface) then
+    return_player_from_editor(self, player)
+  elseif self:is_valid_aboveground_surface(surface) then
+    move_player_to_editor(self, player)
+  else
+    player.print({self.name.."-error.bad-surface-for-editor"})
+  end
+end
+
+---------------------------------------------------------------------------------------------------
+-- inventory handling
 
 local _is_item_prototype_valid_for_editor_cache = {}
 local function is_item_prototype_valid_for_editor(self, item_prototype)
@@ -136,7 +177,7 @@ local function sync_player_inventory(self, character, player)
 end
 
 local function sync_player_inventories(self)
-  for player_index, state in pairs(player_state) do
+  for player_index, state in pairs(self.player_state) do
     local character = state.character
     if character then
       local player = game.players[player_index]
@@ -147,40 +188,11 @@ local function sync_player_inventories(self)
   end
 end
 
-local function move_player_to_editor(self, player)
-  local success = player.clean_cursor()
-  if not success then return end
-  local player_index = player.index
-  local underground_surface = editor_surface(self, player.surface)
-  player_state[player_index] = {
-    position = player.position,
-    surface = player.surface,
-    character = player.character,
-  }
-  player.character = nil
-  player.teleport(player.position, underground_surface)
-end
+---------------------------------------------------------------------------------------------------
+-- ghost handling
 
-local function return_player_from_editor(player)
-  local player_index = player.index
-  local state = player_state[player_index]
-  player.teleport(state.position, state.surface)
-  if state.character then
-    player.character = state.character
-  end
-  player_state[player_index] = nil
-end
-
-function BaseEditor:toggle_editor_status_for_player(player_index)
-  local player = game.players[player_index]
-  local surface = player.surface
-  if is_editor_surface(self, surface) then
-    return_player_from_editor(player)
-  elseif self:is_valid_aboveground_surface(surface) then
-    move_player_to_editor(self, player)
-  else
-    player.print({self.name.."-error.bad-surface-for-editor"})
-  end
+local function nonproxy_name(name)
+  return name:match("^.-%-bpproxy%-(.+)$")
 end
 
 local function abort_player_build(player, entity, message)
@@ -231,18 +243,69 @@ local function item_for_entity(entity)
   return item_prototype.name
 end
 
-local function player_built_underground_entity(player_index, stack)
-  local state = player_state[player_index]
+local function on_player_built_underground_entity(self, player_index, stack)
+  local state = self.player_state[player_index]
   local character = state and state.character
   if character then
     character.remove_item(stack)
   end
 end
 
+-- converts overworld bpproxy ghost to regular ghost underground
+local function on_player_built_bpproxy_ghost(editor_surface, ghost, name)
+  local position = ghost.position
+  local create_entity_args = {
+    name = name,
+    position = position,
+    force = ghost.force,
+    direction = ghost.direction,
+    build_check_type = defines.build_check_type.ghost_place,
+  }
+  if editor_surface.can_place_entity(create_entity_args) then
+    create_entity_args.name = "entity-ghost"
+    create_entity_args.inner_name = name
+    local editor_ghost = editor_surface.create_entity(create_entity_args)
+    editor_ghost.last_user = ghost.last_user
+  else
+    ghost.destroy()
+  end
+end
+
+local function on_player_built_underground_ghost(self, ghost)
+  game.surfaces.nauvis.create_entity{
+    name = "entity-ghost",
+    inner_name = self.name.."-bpproxy-"..ghost.ghost_name,
+    position = ghost.position,
+    force = ghost.force,
+    direction = ghost.direction
+  }
+end
+
+local function on_player_built_ghost(self, ghost)
+  local name = nonproxy_name(ghost.ghost_name)
+  if name then
+    local editor_surface = editor_surface_for_aboveground_surface(self, ghost.surface)
+    if editor_surface.find_entity("entity-ghost", ghost.position) then
+      ghost.destroy()
+      return
+    end
+    return on_player_built_bpproxy_ghost(editor_surface, ghost, name)
+  end
+  if is_editor_surface(self, ghost.surface) then
+    local surface_ghost = game.surfaces.nauvis.find_entity("entity-ghost", ghost.position)
+    if surface_ghost and nonproxy_name(surface_ghost.ghost_name) then
+      ghost.destroy()
+      return
+    end
+    return on_player_built_underground_ghost(self, ghost)
+  end
+end
+
 function BaseEditor:on_built_entity(event)
   local player_index = event.player_index
   local entity = event.created_entity
-  if not entity.valid or entity.name == "entity-ghost" then return end
+  if not entity.valid then return end
+  if entity.name == "entity-ghost" then return on_player_built_ghost(self, entity) end
   local stack = event.stack
   local surface = entity.surface
 
@@ -252,14 +315,14 @@ function BaseEditor:on_built_entity(event)
   end
 
   if is_editor_surface(self, surface) then
-    player_built_underground_entity(player_index, stack)
+    on_player_built_underground_entity(self, player_index, stack)
   end
 end
 
 function BaseEditor:on_picked_up_item(event)
   local player = game.players[event.player_index]
   if not is_editor_surface(self, player.surface) then return end
-  local character = player_state[event.player_index].character
+  local character = self.player_state[event.player_index].character
   if character then
     local stack = event.item_stack
     local inserted = return_to_character_or_spill(player, character, stack)
@@ -276,7 +339,7 @@ function BaseEditor:on_player_mined_item(event)
   if event.mod_name == "upgrade-planner" then
     -- upgrade-planner won't insert to character inventory
     local player = game.players[event.player_index]
-    local character = player_state[event.player_index].character
+    local character = self.player_state[event.player_index].character
     if character then
       local stack = event.item_stack
       local count = stack.count
@@ -294,7 +357,7 @@ function BaseEditor:on_player_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
   if is_editor_surface(self, surface) then
-    local character = player_state[event.player_index].character
+    local character = self.player_state[event.player_index].character
     if character then
       return_buffer_to_character(self, event.player_index, character, event.buffer)
     end
@@ -335,7 +398,7 @@ end
 function BaseEditor:capture_underground_entities_in_blueprint(event)
   local player = game.players[event.player_index]
   local bp_surface = player.surface
-  local underground_surface = editor_surface(self, bp_surface)
+  local underground_surface = editor_surface_for_aboveground_surface(self, bp_surface)
 
   local bp = player.blueprint_to_setup
   if not bp or not bp.valid_for_read then bp = player.cursor_stack end
@@ -387,6 +450,7 @@ local meta = {
 function M.new(name)
   local self = {
     name = name,
+    player_state = {},
     valid_editor_types = {},
   }
   global.editor = self
