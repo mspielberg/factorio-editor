@@ -23,8 +23,8 @@ end
 
 local function editor_surface_name(self, aboveground_surface_name)
   if aboveground_surface_name == "nauvis" then
-  return self.name
-end
+    return self.name
+  end
   return self.name.."-"..aboveground_surface_name
 end
 
@@ -70,8 +70,8 @@ end
 
 local function aboveground_surface_name(self, editor_surface_name)
   if editor_surface_name == self.name then
-  return "nauvis"
-end
+    return "nauvis"
+  end
   return editor_surface_name:sub(#self.name + 2)
 end
 
@@ -206,8 +206,12 @@ end
 ---------------------------------------------------------------------------------------------------
 -- ghost handling
 
-local function nonproxy_name(name)
-  return name:match("%-bpproxy%-(.+)$")
+local function nonproxy_name(self, name)
+  local prefix = self.name.."-bpproxy-"
+  if name:sub(1, #prefix) ~= prefix then
+    return nil
+  end
+  return name:sub(#prefix+1)
 end
 
 --- Inserts stack into character's inventory or spills it at the character's position.
@@ -256,7 +260,7 @@ local function create_underground_entity(self, entity)
   local underground_surface = editor_surface_for_aboveground_surface(self, entity.surface)
   if not underground_surface then return end
   local underground_entity = underground_surface.create_entity{
-    name = nonproxy_name(entity.name),
+    name = nonproxy_name(self, entity.name),
     position = entity.position,
     force = entity.force,
     direction = entity.direction,
@@ -336,7 +340,7 @@ local function on_player_built_underground_ghost(self, ghost)
 end
 
 local function on_player_built_ghost(self, ghost)
-  local name = nonproxy_name(ghost.ghost_name)
+  local name = nonproxy_name(self, ghost.ghost_name)
   if name then
     if is_editor_surface(self, ghost.surface) then
       ghost.destroy()
@@ -359,10 +363,10 @@ local function counterpart_ghosts(self, ghost)
   }
   local out = {}
   local ghost_name = ghost.ghost_name
-  local name = nonproxy_name(ghost_name) or ghost_name
+  local name = nonproxy_name(self, ghost_name) or ghost_name
   for _, other_ghost in ipairs(ghosts) do
     if other_ghost.ghost_name == name
-       or nonproxy_name(other_ghost.ghost_name) == name then
+       or nonproxy_name(self, other_ghost.ghost_name) == name then
       out[#out+1] = other_ghost
     end
   end
@@ -462,7 +466,7 @@ function BaseEditor:on_built_entity(event)
 
   if is_editor_surface(self, surface) then
     on_player_built_underground_entity(self, player_index, stack)
-  elseif nonproxy_name(entity.name) then
+  elseif nonproxy_name(self, entity.name) then
     on_built_bpproxy(self, game.players[player_index], entity, stack)
   end
 end
@@ -526,7 +530,7 @@ end
 
 function BaseEditor:on_robot_built_entity(event)
   local entity = event.created_entity
-  if nonproxy_name(entity.name) then
+  if nonproxy_name(self, entity.name) then
     on_built_bpproxy(self, event.robot, entity, event.stack)
   end
 end
