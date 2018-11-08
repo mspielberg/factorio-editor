@@ -1,0 +1,1 @@
+BaseEditor contains common logic shared between [Beltlayer](https://mods.factorio.com/mod/beltlayer) and [Pipelayer](https://mods.factorio.com/mod/pipelayer).  It is intended to be checked out as a git submodule and be packaged along with the contents of the actual mods.
