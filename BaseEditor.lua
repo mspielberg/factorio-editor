@@ -1,5 +1,4 @@
 local BaseEditor = {}
-local serpent = require "serpent"
 
 ---------------------------------------------------------------------------------------------------
 -- Abstract methods to be overridden by subclasses
@@ -54,6 +53,7 @@ local _editor_surface_cache = {}
 local function editor_surface_for_aboveground_surface(self, aboveground_surface)
   local underground_surface = _editor_surface_cache[aboveground_surface]
   if not underground_surface then
+    if not self:is_valid_aboveground_surface(aboveground_surface) then return nil end
     local underground_surface_name = editor_surface_name(self, aboveground_surface.name)
     if not game.surfaces[underground_surface_name] then
       create_editor_surface(self, underground_surface_name)
@@ -80,6 +80,14 @@ end
 
 local function is_editor_surface(self, surface)
   return surface.name:find("^"..self.name) ~= nil
+end
+
+local function counterpart_surface(self, surface)
+  if is_editor_surface(self, surface) then
+    return aboveground_surface(self, surface)
+  else
+    return editor_surface_for_aboveground_surface(self, surface)
+  end
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -192,21 +200,7 @@ end
 -- ghost handling
 
 local function nonproxy_name(name)
-  return name:match("^.-%-bpproxy%-(.+)$")
-end
-
-local function abort_player_build(player, entity, message)
-  for _, product in ipairs(entity.prototype.mineable_properties.products) do
-    if product.type == "item" and product.amount then
-      player.insert{name = product.name, count = product.amount}
-    end
-  end
-  entity.surface.create_entity{
-    name = "flying-text",
-    position = entity.position,
-    text = message,
-  }
-  entity.destroy()
+  return name:match("%-bpproxy%-(.+)$")
 end
 
 --- Inserts stack into character's inventory or spills it at the character's position.
@@ -248,6 +242,49 @@ local function on_player_built_underground_entity(self, player_index, stack)
   local character = state and state.character
   if character then
     character.remove_item(stack)
+  end
+end
+
+local function create_underground_entity(self, entity)
+  local underground_surface = editor_surface_for_aboveground_surface(self, entity.surface)
+  if not underground_surface then return end
+  local underground_entity = underground_surface.create_entity{
+    name = nonproxy_name(entity.name),
+    position = entity.position,
+    force = entity.force,
+    direction = entity.direction,
+  }
+  entity.surface.create_entity{
+    name = "flying-text",
+    position = entity.position,
+    text = {self.name.."-message.created-underground", underground_entity.localised_name},
+  }
+
+  return underground_entity
+end
+
+local function abort_build(creator, entity, stack, message)
+  local inserted = creator.insert(stack)
+  -- cannot insert directly into robots
+  if inserted == 0 then creator.get_inventory(defines.inventory.robot_cargo).insert(stack) end
+  entity.surface.create_entity{
+    name = "flying-text",
+    position = entity.position,
+    text = message,
+  }
+  entity.destroy()
+end
+
+local function on_built_bpproxy(self, creator, entity, stack)
+  local underground_entity = create_underground_entity(self, entity)
+  if underground_entity then
+    entity.destroy()
+  else
+    abort_build(
+      creator,
+      entity,
+      stack,
+      {"pipelayer-error.underground-obstructed"})
   end
 end
 
@@ -301,66 +338,28 @@ local function on_player_built_ghost(self, ghost)
   end
 end
 
-function BaseEditor:on_built_entity(event)
-  local player_index = event.player_index
-  local entity = event.created_entity
-  if not entity.valid then return end
-  if entity.name == "entity-ghost" then return on_player_built_ghost(self, entity) end
-  local stack = event.stack
-  local surface = entity.surface
-
-  if event.mod_name == "upgrade-planner" then
-    -- work around https://github.com/Klonan/upgrade-planner/issues/10
-    stack = {name = item_for_entity(entity), count = 1}
-  end
-
-  if is_editor_surface(self, surface) then
-    on_player_built_underground_entity(self, player_index, stack)
-  end
-end
-
-function BaseEditor:on_picked_up_item(event)
-  local player = game.players[event.player_index]
-  if not is_editor_surface(self, player.surface) then return end
-  local character = self.player_state[event.player_index].character
-  if character then
-    local stack = event.item_stack
-    local inserted = return_to_character_or_spill(player, character, stack)
-    local excess = stack.count - inserted
-    if not is_stack_valid_for_editor(self, stack) then
-      player.remove_item(stack)
-    elseif excess > 0 then
-      player.remove_item{name = stack.name, count = excess}
+local function counterpart_ghosts(self, ghost)
+  local surface = counterpart_surface(self, ghost.surface)
+  if not surface then return {} end
+  local ghosts = surface.find_entities_filtered{
+    name = "entity-ghost",
+    position = ghost.position,
+  }
+  local out = {}
+  local ghost_name = ghost.ghost_name
+  local name = nonproxy_name(ghost_name) or ghost_name
+  for _, other_ghost in ipairs(ghosts) do
+    if other_ghost.ghost_name == name
+       or nonproxy_name(other_ghost.ghost_name) == name then
+      out[#out+1] = other_ghost
     end
   end
+  return out
 end
 
-function BaseEditor:on_player_mined_item(event)
-  if event.mod_name == "upgrade-planner" then
-    -- upgrade-planner won't insert to character inventory
-    local player = game.players[event.player_index]
-    local character = self.player_state[event.player_index].character
-    if character then
-      local stack = event.item_stack
-      local count = stack.count
-      local inserted = return_to_character_or_spill(player, character, stack)
-      local excess = count - inserted
-      if excess > 0 then
-        -- try to match editor inventory to character inventory
-        player.remove_item{name = stack.name, count = excess}
-      end
-    end
-  end
-end
-
-function BaseEditor:on_player_mined_entity(event)
-  local entity = event.entity
-  local surface = entity.surface
-  if is_editor_surface(self, surface) then
-    local character = self.player_state[event.player_index].character
-    if character then
-      return_buffer_to_character(self, event.player_index, character, event.buffer)
-    end
+local function on_player_mined_ghost(self, ghost)
+  for _, counterpart in ipairs(counterpart_ghosts(self, ghost)) do
+    counterpart.destroy()
   end
 end
 
@@ -434,9 +433,91 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
 end
 
 ---------------------------------------------------------------------------------------------------
--- Ghost management
+-- event handlers
 
+function BaseEditor:on_built_entity(event)
+  local player_index = event.player_index
+  local entity = event.created_entity
+  if not entity.valid then return end
+  if entity.name == "entity-ghost" then return on_player_built_ghost(self, entity) end
+  local stack = event.stack
+  local surface = entity.surface
 
+  if event.mod_name == "upgrade-planner" then
+    -- work around https://github.com/Klonan/upgrade-planner/issues/10
+    stack = {name = item_for_entity(entity), count = 1}
+  end
+
+  if is_editor_surface(self, surface) then
+    on_player_built_underground_entity(self, player_index, stack)
+  elseif nonproxy_name(entity.name) then
+    on_built_bpproxy(self, game.players[player_index], entity, stack)
+  end
+end
+
+function BaseEditor:on_picked_up_item(event)
+  local player = game.players[event.player_index]
+  if not is_editor_surface(self, player.surface) then return end
+  local character = self.player_state[event.player_index].character
+  if character then
+    local stack = event.item_stack
+    local inserted = return_to_character_or_spill(player, character, stack)
+    local excess = stack.count - inserted
+    if not is_stack_valid_for_editor(self, stack) then
+      player.remove_item(stack)
+    elseif excess > 0 then
+      player.remove_item{name = stack.name, count = excess}
+    end
+  end
+end
+
+function BaseEditor:on_player_mined_item(event)
+  if event.mod_name == "upgrade-planner" then
+    -- upgrade-planner won't insert to character inventory
+    local player = game.players[event.player_index]
+    local character = self.player_state[event.player_index].character
+    if character then
+      local stack = event.item_stack
+      local count = stack.count
+      local inserted = return_to_character_or_spill(player, character, stack)
+      local excess = count - inserted
+      if excess > 0 then
+        -- try to match editor inventory to character inventory
+        player.remove_item{name = stack.name, count = excess}
+      end
+    end
+  end
+end
+
+function BaseEditor:on_player_mined_entity(event)
+  local entity = event.entity
+  local surface = entity.surface
+  if is_editor_surface(self, surface) then
+    local character = self.player_state[event.player_index].character
+    if character then
+      return_buffer_to_character(self, event.player_index, character, event.buffer)
+    end
+  end
+end
+
+function BaseEditor:on_pre_ghost_deconstructed(event)
+  on_player_mined_ghost(self, event.ghost)
+end
+
+function BaseEditor:on_pre_player_mined_item(event)
+  local entity = event.entity
+  if not entity.valid then return end
+  if entity.name == "entity-ghost" then
+    return on_player_mined_ghost(self, entity)
+  end
+end
+
+function BaseEditor:on_robot_built_entity(event)
+  local entity = event.created_entity
+  if nonproxy_name(entity.name) then
+    on_built_bpproxy(self, event.robot, entity, event.stack)
+  end
+end
 
 ---------------------------------------------------------------------------------------------------
 -- Exports
@@ -457,17 +538,23 @@ function M.new(name)
   return M.restore(self)
 end
 
+function M.instance(name)
+  if global.editor then
+    return global.editor
+  else
+    return M.new(name)
+  end
+end
+
 function M.restore(self)
   return setmetatable(self, meta)
 end
 
 function M.on_init()
-  global.player_state = {}
   M.on_load()
 end
 
 function M.on_load()
-  player_state = global.player_state
   if global.editor then
     M.restore(global.editor)
   end

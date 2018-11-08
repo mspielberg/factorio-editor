@@ -22,6 +22,38 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "Watch for changes",
+            "type": "shell",
+            "command": "",
+            "windows": {
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": [
+                            "/c"
+                        ]
+                    }
+                },
+                "command": "c:\\cygwin64\\bin\\bash -c '/usr/bin/python ~/winhome/Documents/autoreload.py -f .lua /usr/local/bin/busted -v'"
+            },
+            "isBackground": true,
+            "problemMatcher":{
+                "owner": "lua",
+                "fileLocation":"relative",
+                "pattern":{
+                    "regexp": "^(.+):([\\d]+): (.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "message": 3
+                },
+                "background":{
+                    "activeOnStart": true,
+                    "beginsPattern": "^autoreloading .*busted",
+                    "endsPattern": "^autoreload complete$",
+                }
+            }
         }
     ]
 }

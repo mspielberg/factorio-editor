@@ -6,6 +6,9 @@ local function export_mocks(env, args)
     build_check_type = {
       ghost_type = {},
     },
+    inventory = {
+      robot_cargo = 1,
+    },
   }
   env.defines = defines
 
@@ -72,7 +75,7 @@ local function export_mocks(env, args)
   }
 
   local entity_prototypes = {
-    validentity = { type = "validtype", items_to_place_this = {} },
+    validentity = { type = "validtype", items_to_place_this = {}, localised_name = {"validentity-localised"} },
   }
 
   local item_prototypes = {
@@ -107,6 +110,7 @@ local function export_mocks(env, args)
   local editor_entity = {
     valid = true,
     name = "validentity",
+    localised_name = entity_prototypes.validentity.localised_name,
     position = {x=2, y=2},
     prototype = entity_prototypes.validentity,
     surface = editor_surface,
@@ -159,6 +163,7 @@ describe("A BaseEditor", function()
   local p
   local uut
   local editor_surface
+  local nauvis
   before_each(function()
     package.loaded["BaseEditor"] = nil
     BaseEditor = require "BaseEditor"
@@ -167,6 +172,7 @@ describe("A BaseEditor", function()
     mocks = export_mocks(_G, {create_editor_surface = true})
     g, p, c = mocks.game, mocks.player, mocks.player.character
     editor_surface = mocks.editor_surface
+    nauvis = mocks.nauvis
     uut = BaseEditor.new("testeditor")
     uut.valid_editor_types[1] = "validtype"
   end)
@@ -394,7 +400,6 @@ describe("A BaseEditor", function()
       end)
 
       it("places aboveground bpproxy ghosts when underground ghosts are placed", function()
-        local nauvis = g.surfaces.nauvis
         nauvis.find_entity = stub()
         nauvis.create_entity = spy.new(function() return surface_ghost end)
         uut:on_built_entity{
@@ -413,26 +418,111 @@ describe("A BaseEditor", function()
 
     describe("ghost removal", function()
       describe("destroys aboveground ghosts when underground ghosts are removed", function()
-        it("by mining", function()
-          pending("implementation of test")
+        it("by mining or entity placement", function()
+          nauvis.find_entities_filtered = spy.new(function() return {surface_ghost} end)
+          uut:on_pre_player_mined_item{entity = editor_ghost}
+          assert.spy(nauvis.find_entities_filtered).was.called_with{
+            name = "entity-ghost",
+            position = editor_ghost.position,
+          }
+          assert.stub(surface_ghost.destroy).was.called()
         end)
 
         it("by deconstruction planner", function()
-          pending("implementation of test")
-        end)
-
-        it("by placing an entity", function()
-          pending("implementation of test")
+          nauvis.find_entities_filtered = spy.new(function() return {surface_ghost} end)
+          uut:on_pre_ghost_deconstructed{ghost = editor_ghost}
+          assert.spy(nauvis.find_entities_filtered).was.called_with{
+            name = "entity-ghost",
+            position = editor_ghost.position,
+          }
+          assert.stub(surface_ghost.destroy).was.called()
         end)
       end)
 
       describe("destroys underground ghosts when aboveground ghosts are removed", function()
-        it("by mining", function()
-          pending("implementation of test")
+        it("by mining or entity placement", function()
+          editor_surface.find_entities_filtered = spy.new(function() return {editor_ghost} end)
+          uut:on_pre_player_mined_item{entity = surface_ghost}
+          assert.spy(editor_surface.find_entities_filtered).was.called_with{
+            name = "entity-ghost",
+            position = surface_ghost.position,
+          }
+          assert.stub(editor_ghost.destroy).was.called()
         end)
 
         it("by deconstruction planner", function()
-          pending("implementation of test")
+          editor_surface.find_entities_filtered = spy.new(function() return {editor_ghost} end)
+          uut:on_pre_ghost_deconstructed{ghost = surface_ghost}
+          assert.spy(editor_surface.find_entities_filtered).was.called_with{
+            name = "entity-ghost",
+            position = surface_ghost.position,
+          }
+          assert.stub(editor_ghost.destroy).was.called()
+        end)
+      end)
+    end)
+
+    describe("handles bpproxy construction", function()
+      local bpproxy_entity = {
+        valid = true,
+        name = "testeditor-bpproxy-validentity",
+        position = surface_ghost.position,
+        direction = surface_ghost.direction,
+        surface = nauvis,
+        destroy = stub(),
+      }
+
+      describe("constructs underground entity when bpproxy is built", function()
+        local function validate()
+          assert.spy(editor_surface.create_entity).was.called_with{
+            name = "validentity",
+            position = surface_ghost.position,
+            direction = surface_ghost.direction,
+            force = surface_ghost.ghost,
+          }
+          assert.stub(nauvis.create_entity).was.called_with{
+            name = "flying-text",
+            position = bpproxy_entity.position,
+            text = {"testeditor-message.created-underground", {"validentity-localised"}}
+          }
+          assert.stub(bpproxy_entity.destroy).was.called()
+        end
+
+        it("by player", function()
+          editor_surface.create_entity = spy.new(function() return mocks.editor_entity end)
+          bpproxy_entity.surface = nauvis
+          nauvis.create_entity = stub()
+          uut:on_built_entity{
+            player_index = 1,
+            created_entity = bpproxy_entity,
+            stack = { name = "validitem", count = 1},
+          }
+          validate()
+        end)
+
+        it("by robot", function()
+          editor_surface.create_entity = spy.new(function() return mocks.editor_entity end)
+          bpproxy_entity.surface = nauvis
+          nauvis.create_entity = stub()
+          uut:on_robot_built_entity{
+            robot = stub(),
+            created_entity = bpproxy_entity,
+            stack = { name = "validitem", count = 1},
+          }
+          validate()
+        end)
+
+        it("by Nanobots/Bluebuild", function()
+          editor_surface.create_entity = spy.new(function() return mocks.editor_entity end)
+          bpproxy_entity.surface = nauvis
+          nauvis.create_entity = stub()
+          uut:on_built_entity{
+            player_index = 1,
+            created_entity = bpproxy_entity,
+            revive = true,
+            revived = true,
+          }
+          validate()
         end)
       end)
     end)
