@@ -165,6 +165,7 @@ describe("A BaseEditor", function()
   local editor_surface
   local nauvis
   before_each(function()
+    -- force reload to clear caches between test cases
     package.loaded["BaseEditor"] = nil
     BaseEditor = require "BaseEditor"
     BaseEditor.on_init()
@@ -178,10 +179,9 @@ describe("A BaseEditor", function()
   end)
 
   describe("creates editor surfaces", function()
-    local g
-    local p
     before_each(function()
-      mocks = export_mocks(_G)
+      -- override with mocks that don't have the editor surface created
+      mocks = export_mocks(_G, {create_editor_surface = false})
       g, p = mocks.game, mocks.player
       uut = BaseEditor.new("testeditor")
     end)
@@ -280,6 +280,7 @@ describe("A BaseEditor", function()
 
     it("works around upgrade-planner#10", function()
       uut:toggle_editor_status_for_player(1)
+      nauvis.find_entities_filtered = function() return {} end
       uut:on_built_entity{
         mod_name = "upgrade-planner",
         player_index = 1,
@@ -446,7 +447,7 @@ describe("A BaseEditor", function()
 
     describe("ghost removal", function()
       describe("destroys aboveground ghosts when underground ghosts are removed", function()
-        it("by mining or entity placement", function()
+        it("by mining", function()
           nauvis.find_entities_filtered = spy.new(function() return {surface_ghost} end)
           uut:on_pre_player_mined_item{entity = editor_ghost}
           assert.spy(nauvis.find_entities_filtered).was.called_with{
@@ -461,6 +462,25 @@ describe("A BaseEditor", function()
           uut:on_pre_ghost_deconstructed{ghost = editor_ghost}
           assert.spy(nauvis.find_entities_filtered).was.called_with{
             name = "entity-ghost",
+            position = editor_ghost.position,
+          }
+          assert.stub(surface_ghost.destroy).was.called()
+        end)
+
+        it("by entity placement", function()
+          local matching_entity = {
+            valid = true,
+            name = "validentity",
+            type = "validtype",
+            position = editor_ghost.position,
+            direction = editor_ghost.position,
+            force = editor_ghost.force,
+            surface = editor_surface,
+          }
+          nauvis.find_entities_filtered = spy.new(function() return {surface_ghost} end)
+          uut:on_built_entity{created_entity = matching_entity}
+          assert.spy(nauvis.find_entities_filtered).was.called_with{
+            ghost_name = "testeditor-bpproxy-validentity",
             position = editor_ghost.position,
           }
           assert.stub(surface_ghost.destroy).was.called()

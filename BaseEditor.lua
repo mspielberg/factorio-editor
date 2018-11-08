@@ -68,11 +68,11 @@ local function editor_surface_for_aboveground_surface(self, aboveground_surface)
   return underground_surface
 end
 
-local function aboveground_surface_name(self, editor_surface_name)
-  if editor_surface_name == self.name then
+local function aboveground_surface_name(self, underground_surface_name)
+  if underground_surface_name == self.name then
     return "nauvis"
   end
-  return editor_surface_name:sub(#self.name + 2)
+  return underground_surface_name:sub(#self.name + 2)
 end
 
 local _aboveground_surface_cache = {}
@@ -81,6 +81,7 @@ local function aboveground_surface(self, editor_surface)
   if not surface then
     local surface_name = aboveground_surface_name(self, editor_surface.name)
     surface = game.surfaces[surface_name]
+    _aboveground_surface_cache[editor_surface] = surface
   end
   return surface
 end
@@ -154,6 +155,7 @@ local function is_item_prototype_valid_for_editor(self, item_prototype)
         end
       end
     end
+    _is_item_prototype_valid_for_editor_cache[item_prototype] = is_valid
   end
   return is_valid
 end
@@ -248,11 +250,21 @@ local function item_for_entity(entity)
   return item_prototype.name
 end
 
-local function on_player_built_underground_entity(self, player_index, stack)
+local function on_player_built_underground_entity(self, player_index, entity, stack)
   local state = self.player_state[player_index]
   local character = state and state.character
   if character then
     character.remove_item(stack)
+  end
+
+  -- look for bpproxy ghost on the surface
+  local surface = aboveground_surface(self, entity.surface)
+  local bpproxy_ghosts = surface.find_entities_filtered{
+    ghost_name = self.name.."-bpproxy-"..entity.name,
+    position = entity.position,
+  }
+  for _, counterpart in ipairs(bpproxy_ghosts) do
+    counterpart.destroy()
   end
 end
 
@@ -298,8 +310,6 @@ local function on_built_bpproxy(self, creator, entity, stack)
       {"pipelayer-error.underground-obstructed"})
   end
 end
-
--- translate into surface bpproxy ghost and continue
 
 -- converts overworld bpproxy ghost to regular ghost underground
 local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
@@ -363,10 +373,10 @@ local function counterpart_ghosts(self, ghost)
   }
   local out = {}
   local ghost_name = ghost.ghost_name
-  local name = nonproxy_name(self, ghost_name) or ghost_name
+  local nonproxy = nonproxy_name(self, ghost_name)
   for _, other_ghost in ipairs(ghosts) do
-    if other_ghost.ghost_name == name
-       or nonproxy_name(self, other_ghost.ghost_name) == name then
+    if other_ghost.ghost_name == nonproxy
+       or nonproxy_name(self, other_ghost.ghost_name) == ghost_name then
       out[#out+1] = other_ghost
     end
   end
@@ -465,7 +475,7 @@ function BaseEditor:on_built_entity(event)
   end
 
   if is_editor_surface(self, surface) then
-    on_player_built_underground_entity(self, player_index, stack)
+    on_player_built_underground_entity(self, player_index, entity, stack)
   elseif nonproxy_name(self, entity.name) then
     on_built_bpproxy(self, game.players[player_index], entity, stack)
   end
