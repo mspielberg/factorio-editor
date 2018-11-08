@@ -178,7 +178,7 @@ local function sync_player_inventory(self, character, player)
     local player_count = player.get_item_count(name)
     if character_count > player_count then
       player.insert{name = name, count = character_count - player_count}
-    elseif character_count < player_count then
+    elseif character_count < player_count and not player.cheat_mode then
       player.remove_item{name = name, count = player_count - character_count}
     end
   end
@@ -288,8 +288,16 @@ local function on_built_bpproxy(self, creator, entity, stack)
   end
 end
 
+-- translate into surface bpproxy ghost and continue
+
 -- converts overworld bpproxy ghost to regular ghost underground
-local function on_player_built_bpproxy_ghost(editor_surface, ghost, name)
+local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
+  local editor_surface = editor_surface_for_aboveground_surface(self, ghost.surface)
+  if editor_surface.find_entity("entity-ghost", ghost.position) then
+    ghost.destroy()
+    return
+  end
+
   local position = ghost.position
   local create_entity_args = {
     name = name,
@@ -298,6 +306,7 @@ local function on_player_built_bpproxy_ghost(editor_surface, ghost, name)
     direction = ghost.direction,
     build_check_type = defines.build_check_type.ghost_place,
   }
+
   if editor_surface.can_place_entity(create_entity_args) then
     create_entity_args.name = "entity-ghost"
     create_entity_args.inner_name = name
@@ -309,7 +318,8 @@ local function on_player_built_bpproxy_ghost(editor_surface, ghost, name)
 end
 
 local function on_player_built_underground_ghost(self, ghost)
-  game.surfaces.nauvis.create_entity{
+  local surface = aboveground_surface(self, ghost.surface)
+  surface.create_entity{
     name = "entity-ghost",
     inner_name = self.name.."-bpproxy-"..ghost.ghost_name,
     position = ghost.position,
@@ -321,19 +331,14 @@ end
 local function on_player_built_ghost(self, ghost)
   local name = nonproxy_name(ghost.ghost_name)
   if name then
-    local editor_surface = editor_surface_for_aboveground_surface(self, ghost.surface)
-    if editor_surface.find_entity("entity-ghost", ghost.position) then
+    if is_editor_surface(self, ghost.surface) then
       ghost.destroy()
       return
+    else
+      return on_player_built_surface_bpproxy_ghost(self, ghost, name)
     end
-    return on_player_built_bpproxy_ghost(editor_surface, ghost, name)
   end
   if is_editor_surface(self, ghost.surface) then
-    local surface_ghost = game.surfaces.nauvis.find_entity("entity-ghost", ghost.position)
-    if surface_ghost and nonproxy_name(surface_ghost.ghost_name) then
-      ghost.destroy()
-      return
-    end
     return on_player_built_underground_ghost(self, ghost)
   end
 end
