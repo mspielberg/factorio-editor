@@ -5,6 +5,7 @@ local BaseEditor = {}
 
 function BaseEditor:is_valid_aboveground_surface(surface)
   return surface.name == "nauvis"
+    or surface.name:match("^Nauvis plus ")
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -16,12 +17,15 @@ local function editor_autoplace_control()
       return control
     end
   end
-  -- pick one at random
+  -- pick arbitrary terrain
   return next(game.autoplace_control_prototypes)
 end
 
 local function editor_surface_name(self, aboveground_surface_name)
+  if aboveground_surface_name == "nauvis" then
   return self.name
+end
+  return self.name.."-"..aboveground_surface_name
 end
 
 local function create_editor_surface(self, name)
@@ -65,7 +69,10 @@ local function editor_surface_for_aboveground_surface(self, aboveground_surface)
 end
 
 local function aboveground_surface_name(self, editor_surface_name)
+  if editor_surface_name == self.name then
   return "nauvis"
+end
+  return editor_surface_name:sub(#self.name + 2)
 end
 
 local _aboveground_surface_cache = {}
