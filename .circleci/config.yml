@@ -2,12 +2,12 @@ version: 2
 jobs:
   build:
     docker:
-      - image: akorn/luarocks:lua5.2-alpine
+      - image: abaez/luarocks
     steps:
-      - checkout
       - run:
           name: Install APKs
-          command: apk add --no-cache gcc git libc-dev unzip
+          command: apk add --no-cache --update git
+      - checkout
       - run:
           name: Install rocks
           command: luarocks install busted && 
