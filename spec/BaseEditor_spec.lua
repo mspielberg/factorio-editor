@@ -261,7 +261,7 @@ describe("A BaseEditor", function()
         entity = mocks.editor_entity,
         buffer = mocks.buffer,
       }
-      assert.is(mocks.buffer.count, 0)
+      assert.are.equal(mocks.buffer[1].count, 0)
       mocks.buffer[1].count = 1
       assert.spy(c.insert).was.called_with(mocks.buffer[1])
     end)
@@ -340,6 +340,7 @@ describe("A BaseEditor", function()
   describe("manages ghosts", function()
     local surface_ghost_invalid_access
     local surface_ghost
+    local editor_ghost_invalid_access
     local editor_ghost
     before_each(function()
       surface_ghost = {
@@ -355,7 +356,7 @@ describe("A BaseEditor", function()
         last_user = p,
         destroy = stub(),
       }
-      surface_ghost_invalid_access = spy.new(function(t,k) print("invalid key "..k.." accessed") end)
+      surface_ghost_invalid_access = spy.new(function(t, k) print("invalid key "..k.." accessed") end)
       setmetatable(surface_ghost, {
         __index = function(...) surface_ghost_invalid_access(...) end,
       })
@@ -373,6 +374,10 @@ describe("A BaseEditor", function()
         direction = 0,
         destroy = stub(),
       }
+      editor_ghost_invalid_access = spy.new(function(t, k) print("invalid key "..k.." accessed") end)
+      setmetatable(editor_ghost, {
+        __index = function(...) editor_ghost_invalid_access(...) end,
+      })
     end)
 
     describe("new ghost creation", function()
@@ -400,7 +405,7 @@ describe("A BaseEditor", function()
           force = "player",
           direction = 0,
         }
-        assert.is(editor_ghost.last_user, surface_ghost.last_user)
+        assert.are.equal(editor_ghost.last_user, surface_ghost.last_user)
         assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
@@ -432,7 +437,7 @@ describe("A BaseEditor", function()
           direction = 0,
           type = "output",
         }
-        assert.is(editor_ghost.last_user, surface_ghost.last_user)
+        assert.are.equal(editor_ghost.last_user, surface_ghost.last_user)
         assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
@@ -464,7 +469,7 @@ describe("A BaseEditor", function()
           direction = 0,
           type = "output",
         }
-        assert.is(editor_ghost.last_user, surface_ghost.last_user)
+        assert.are.equal(editor_ghost.last_user, surface_ghost.last_user)
         assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
