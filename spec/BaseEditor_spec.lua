@@ -409,7 +409,7 @@ describe("A BaseEditor", function()
         assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
-      it("copies belt_to_ground_type for underground-belt bpproxies", function()
+      it("copies belt_to_ground_type from underground-belt bpproxies", function()
         editor_surface.find_entity = spy.new(function() return nil end)
         editor_surface.can_place_entity = spy.new(function() return true end)
         editor_surface.create_entity = spy.new(function() return editor_ghost end)
@@ -441,7 +441,7 @@ describe("A BaseEditor", function()
         assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
-      it("copies loader_type for loader bpproxies", function()
+      it("copies loader_type from loader bpproxies", function()
         editor_surface.find_entity = spy.new(function() return nil end)
         editor_surface.can_place_entity = spy.new(function() return true end)
         editor_surface.create_entity = spy.new(function() return editor_ghost end)
@@ -506,8 +506,47 @@ describe("A BaseEditor", function()
           direction = 0,
           force = "player",
         }
-        assert.stub(surface_ghost_invalid_access).was_not.called()
+        assert.stub(editor_ghost_invalid_access).was_not.called()
       end)
+
+      it("copies belt_to_ground_type for underground underground-belt ghosts", function()
+        editor_ghost.ghost_type = "underground-belt"
+        editor_ghost.belt_to_ground_type = "output"
+        nauvis.create_entity = spy.new(function() return surface_ghost end)
+        uut:on_built_entity{
+          player_index = 1,
+          created_entity = editor_ghost,
+        }
+        assert.spy(nauvis.create_entity).was.called_with{
+          name = "entity-ghost",
+          inner_name = "testeditor-bpproxy-validentity",
+          position = {x=0, y=0},
+          direction = 0,
+          force = "player",
+          type = "output",
+        }
+        assert.stub(editor_ghost_invalid_access).was_not.called()
+      end)
+
+      it("copies loader_type for underground loader ghosts", function()
+        editor_ghost.ghost_type = "loader"
+        editor_ghost.loader_type = "output"
+        nauvis.create_entity = spy.new(function() return surface_ghost end)
+        uut:on_built_entity{
+          player_index = 1,
+          created_entity = editor_ghost,
+        }
+        assert.spy(nauvis.create_entity).was.called_with{
+          name = "entity-ghost",
+          inner_name = "testeditor-bpproxy-validentity",
+          position = {x=0, y=0},
+          direction = 0,
+          force = "player",
+          type = "output",
+        }
+        assert.stub(editor_ghost_invalid_access).was_not.called()
+      end)
+
 
       it("prevents bpproxy ghosts from being placed underground", function()
         local underground_bpproxy_ghost = {
@@ -523,7 +562,6 @@ describe("A BaseEditor", function()
 
         uut:on_built_entity{ player_index = 1, created_entity = underground_bpproxy_ghost }
         assert.stub(underground_bpproxy_ghost.destroy).was.called()
-        assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
     end)
 

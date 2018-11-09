@@ -353,13 +353,19 @@ end
 
 local function on_player_built_underground_ghost(self, ghost)
   local surface = self:aboveground_surface_for_editor_surface(ghost.surface)
-  surface.create_entity{
+  local create_entity_args = {
     name = "entity-ghost",
     inner_name = self.name.."-bpproxy-"..ghost.ghost_name,
     position = ghost.position,
     force = ghost.force,
     direction = ghost.direction
   }
+  if ghost.ghost_type == "underground-belt" then
+    create_entity_args.type = ghost.belt_to_ground_type
+  elseif ghost.ghost_type == "loader" then
+    create_entity_args.type = ghost.loader_type
+  end
+  surface.create_entity(create_entity_args)
 end
 
 local function on_player_built_ghost(self, ghost)
