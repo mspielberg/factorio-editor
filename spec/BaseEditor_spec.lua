@@ -4,7 +4,7 @@ local serpent = require "serpent"
 local function export_mocks(env, args)
   local defines = {
     build_check_type = {
-      ghost_type = {},
+      ghost_place = {},
     },
     inventory = {
       robot_cargo = 1,
@@ -338,6 +338,7 @@ describe("A BaseEditor", function()
   end)
 
   describe("manages ghosts", function()
+    local surface_ghost_invalid_access
     local surface_ghost
     local editor_ghost
     before_each(function()
@@ -351,8 +352,15 @@ describe("A BaseEditor", function()
         position = {x=0, y=0},
         force = "player",
         direction = 0,
+        last_user = p,
         destroy = stub(),
       }
+      surface_ghost_invalid_access = spy.new(function(t,k) print("invalid key "..k.." accessed") end)
+      setmetatable(surface_ghost, {
+        __index = function(...) surface_ghost_invalid_access(...) end,
+      })
+
+
       editor_ghost = {
         valid = true,
         surface = editor_surface,
@@ -392,6 +400,72 @@ describe("A BaseEditor", function()
           force = "player",
           direction = 0,
         }
+        assert.is(editor_ghost.last_user, surface_ghost.last_user)
+        assert.stub(surface_ghost_invalid_access).was_not.called()
+      end)
+
+      it("copies belt_to_ground_type for underground-belt bpproxies", function()
+        editor_surface.find_entity = spy.new(function() return nil end)
+        editor_surface.can_place_entity = spy.new(function() return true end)
+        editor_surface.create_entity = spy.new(function() return editor_ghost end)
+
+        surface_ghost.ghost_type = "underground-belt"
+        surface_ghost.belt_to_ground_type = "output"
+        uut:on_built_entity{
+          player_index = 1,
+          created_entity = surface_ghost,
+        }
+
+        assert.spy(editor_surface.can_place_entity).was.called_with{
+          name = "validentity",
+          position = {x=0, y=0},
+          force = "player",
+          direction = 0,
+          type = "output",
+          build_check_type = _G.defines.build_check_type.ghost_place,
+        }
+        assert.spy(editor_surface.create_entity).was.called_with{
+          name = "entity-ghost",
+          inner_name = "validentity",
+          position = {x=0, y=0},
+          force = "player",
+          direction = 0,
+          type = "output",
+        }
+        assert.is(editor_ghost.last_user, surface_ghost.last_user)
+        assert.stub(surface_ghost_invalid_access).was_not.called()
+      end)
+
+      it("copies loader_type for loader bpproxies", function()
+        editor_surface.find_entity = spy.new(function() return nil end)
+        editor_surface.can_place_entity = spy.new(function() return true end)
+        editor_surface.create_entity = spy.new(function() return editor_ghost end)
+
+        surface_ghost.ghost_type = "loader"
+        surface_ghost.loader_type = "output"
+        uut:on_built_entity{
+          player_index = 1,
+          created_entity = surface_ghost,
+        }
+
+        assert.spy(editor_surface.can_place_entity).was.called_with{
+          name = "validentity",
+          position = {x=0, y=0},
+          force = "player",
+          direction = 0,
+          type = "output",
+          build_check_type = _G.defines.build_check_type.ghost_place,
+        }
+        assert.spy(editor_surface.create_entity).was.called_with{
+          name = "entity-ghost",
+          inner_name = "validentity",
+          position = {x=0, y=0},
+          force = "player",
+          direction = 0,
+          type = "output",
+        }
+        assert.is(editor_ghost.last_user, surface_ghost.last_user)
+        assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
       it("destroys newly placed aboveground bpproxy ghosts if underground is blocked", function()
@@ -411,6 +485,7 @@ describe("A BaseEditor", function()
           build_check_type = _G.defines.build_check_type.ghost_place,
         }
         assert.stub(surface_ghost.destroy).was.called()
+        assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
       it("places aboveground bpproxy ghosts when underground ghosts are placed", function()
@@ -426,6 +501,7 @@ describe("A BaseEditor", function()
           direction = 0,
           force = "player",
         }
+        assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
 
       it("prevents bpproxy ghosts from being placed underground", function()
@@ -442,6 +518,7 @@ describe("A BaseEditor", function()
 
         uut:on_built_entity{ player_index = 1, created_entity = underground_bpproxy_ghost }
         assert.stub(underground_bpproxy_ghost.destroy).was.called()
+        assert.stub(surface_ghost_invalid_access).was_not.called()
       end)
     end)
 
@@ -511,19 +588,25 @@ describe("A BaseEditor", function()
     end)
 
     describe("handles bpproxy construction", function()
-      local invalid_field_access_stub = spy.new(function(t,k) print("field "..k.." accessed on "..(t.name)) end)
-      local invalid_field_access = function(t, k) invalid_field_access_stub(t, k) end
-      local bpproxy_entity = {
-        valid = true,
-        name = "testeditor-bpproxy-validentity",
-        type = "validtype",
-        force = surface_ghost.force,
-        position = surface_ghost.position,
-        direction = surface_ghost.direction,
-        surface = nauvis,
-        destroy = stub(),
-      }
-      setmetatable(bpproxy_entity, { __index = invalid_field_access })
+      local invalid_field_access_stub
+      local bpproxy_entity
+
+      before_each(function()
+        invalid_field_access_stub = spy.new(function(t,k) print("field "..k.." accessed on "..(t.name)) end)
+        bpproxy_entity = {
+          valid = true,
+          name = "testeditor-bpproxy-validentity",
+          type = "validtype",
+          force = surface_ghost.force,
+          position = surface_ghost.position,
+          direction = surface_ghost.direction,
+          surface = nauvis,
+          destroy = stub(),
+        }
+        setmetatable(bpproxy_entity, {
+           __index = function(t, k) invalid_field_access_stub(t, k) end
+        })
+      end)
 
       describe("constructs underground entity when bpproxy is built", function()
         local function validate()

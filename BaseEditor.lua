@@ -334,10 +334,16 @@ local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
     direction = ghost.direction,
     build_check_type = defines.build_check_type.ghost_place,
   }
+  if ghost.ghost_type == "underground-belt" then
+    create_entity_args.type = ghost.belt_to_ground_type
+  elseif ghost.ghost_type == "loader" then
+    create_entity_args.type = ghost.loader_type
+  end
 
   if editor_surface.can_place_entity(create_entity_args) then
     create_entity_args.name = "entity-ghost"
     create_entity_args.inner_name = name
+    create_entity_args.build_check_type = nil
     local editor_ghost = editor_surface.create_entity(create_entity_args)
     editor_ghost.last_user = ghost.last_user
   else
