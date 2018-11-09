@@ -1,0 +1,18 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: akorn/luarocks:lua5.2-alpine
+    steps:
+      - checkout
+      - run:
+          name: Install APKs
+          command: apk add --no-cache gcc git libc-dev unzip
+      - run:
+          name: Install rocks
+          command: luarocks install busted && 
+                   luarocks install luafilesystem && 
+                   luarocks install serpent
+      - run:
+          name: Run unit tests
+          command: busted -v
