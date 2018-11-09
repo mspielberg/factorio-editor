@@ -341,7 +341,7 @@ describe("A BaseEditor", function()
     local surface_ghost
     local editor_ghost
     before_each(function()
-        surface_ghost = {
+      surface_ghost = {
         valid = true,
         surface = mocks.nauvis,
         name = "entity-ghost",
@@ -511,14 +511,19 @@ describe("A BaseEditor", function()
     end)
 
     describe("handles bpproxy construction", function()
+      local invalid_field_access_stub = spy.new(function(t,k) print("field "..k.." accessed on "..(t.name)) end)
+      local invalid_field_access = function(t, k) invalid_field_access_stub(t, k) end
       local bpproxy_entity = {
         valid = true,
         name = "testeditor-bpproxy-validentity",
+        type = "validtype",
+        force = surface_ghost.force,
         position = surface_ghost.position,
         direction = surface_ghost.direction,
         surface = nauvis,
         destroy = stub(),
       }
+      setmetatable(bpproxy_entity, { __index = invalid_field_access })
 
       describe("constructs underground entity when bpproxy is built", function()
         local function validate()
@@ -526,7 +531,7 @@ describe("A BaseEditor", function()
             name = "validentity",
             position = surface_ghost.position,
             direction = surface_ghost.direction,
-            force = surface_ghost.ghost,
+            force = surface_ghost.force,
           }
           assert.stub(nauvis.create_entity).was.called_with{
             name = "flying-text",
@@ -534,6 +539,7 @@ describe("A BaseEditor", function()
             text = {"testeditor-message.created-underground", {"validentity-localised"}}
           }
           assert.stub(bpproxy_entity.destroy).was.called()
+          assert.stub(invalid_field_access_stub).was_not.called()
         end
 
         it("by player", function()
@@ -571,6 +577,62 @@ describe("A BaseEditor", function()
             revived = true,
           }
           validate()
+        end)
+
+        it("copies belt_to_ground_type for underground-belt entities", function()
+          editor_surface.create_entity = spy.new(function() return mocks.editor_entity end)
+          bpproxy_entity.surface = nauvis
+          bpproxy_entity.type = "underground-belt"
+          bpproxy_entity.belt_to_ground_type = "input"
+          nauvis.create_entity = stub()
+          uut:on_built_entity{
+            player_index = 1,
+            created_entity = bpproxy_entity,
+            stack = { name = "validitem", count = 1},
+          }
+
+          assert.spy(editor_surface.create_entity).was.called_with{
+            name = "validentity",
+            position = surface_ghost.position,
+            direction = surface_ghost.direction,
+            force = surface_ghost.force,
+            type = "input",
+          }
+          assert.stub(nauvis.create_entity).was.called_with{
+            name = "flying-text",
+            position = bpproxy_entity.position,
+            text = {"testeditor-message.created-underground", {"validentity-localised"}}
+          }
+          assert.stub(bpproxy_entity.destroy).was.called()
+          assert.stub(invalid_field_access_stub).was_not.called()
+        end)
+
+        it("copies loader_type for loader entities", function()
+          editor_surface.create_entity = spy.new(function() return mocks.editor_entity end)
+          bpproxy_entity.surface = nauvis
+          bpproxy_entity.type = "loader"
+          bpproxy_entity.loader_type = "input"
+          nauvis.create_entity = stub()
+          uut:on_built_entity{
+            player_index = 1,
+            created_entity = bpproxy_entity,
+            stack = { name = "validitem", count = 1},
+          }
+
+          assert.spy(editor_surface.create_entity).was.called_with{
+            name = "validentity",
+            position = surface_ghost.position,
+            direction = surface_ghost.direction,
+            force = surface_ghost.force,
+            type = "input",
+          }
+          assert.stub(nauvis.create_entity).was.called_with{
+            name = "flying-text",
+            position = bpproxy_entity.position,
+            text = {"testeditor-message.created-underground", {"validentity-localised"}}
+          }
+          assert.stub(bpproxy_entity.destroy).was.called()
+          assert.stub(invalid_field_access_stub).was_not.called()
         end)
       end)
     end)

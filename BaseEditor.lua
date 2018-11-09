@@ -54,7 +54,7 @@ local function create_editor_surface(self, name)
 end
 
 local _editor_surface_cache = {}
-local function editor_surface_for_aboveground_surface(self, aboveground_surface)
+function BaseEditor:editor_surface_for_aboveground_surface(aboveground_surface)
   local underground_surface = _editor_surface_cache[aboveground_surface]
   if not underground_surface then
     if not self:is_valid_aboveground_surface(aboveground_surface) then return nil end
@@ -76,7 +76,7 @@ local function aboveground_surface_name(self, underground_surface_name)
 end
 
 local _aboveground_surface_cache = {}
-local function aboveground_surface(self, editor_surface)
+function BaseEditor:aboveground_surface_for_editor_surface(editor_surface)
   local surface = _aboveground_surface_cache[editor_surface]
   if not surface then
     local surface_name = aboveground_surface_name(self, editor_surface.name)
@@ -86,15 +86,15 @@ local function aboveground_surface(self, editor_surface)
   return surface
 end
 
-local function is_editor_surface(self, surface)
+function BaseEditor:is_editor_surface(surface)
   return surface.name:find("^"..self.name) ~= nil
 end
 
 local function counterpart_surface(self, surface)
-  if is_editor_surface(self, surface) then
-    return aboveground_surface(self, surface)
+  if self:is_editor_surface(surface) then
+    return self:aboveground_surface_for_editor_surface(surface)
   else
-    return editor_surface_for_aboveground_surface(self, surface)
+    return self:editor_surface_for_aboveground_surface(surface)
   end
 end
 
@@ -105,7 +105,7 @@ local function move_player_to_editor(self, player)
   local success = player.clean_cursor()
   if not success then return end
   local player_index = player.index
-  local underground_surface = editor_surface_for_aboveground_surface(self, player.surface)
+  local underground_surface = self:editor_surface_for_aboveground_surface(player.surface)
   self.player_state[player_index] = {
     position = player.position,
     surface = player.surface,
@@ -128,7 +128,7 @@ end
 function BaseEditor:toggle_editor_status_for_player(player_index)
   local player = game.players[player_index]
   local surface = player.surface
-  if is_editor_surface(self, surface) then
+  if self:is_editor_surface(surface) then
     return_player_from_editor(self, player)
   elseif self:is_valid_aboveground_surface(surface) then
     move_player_to_editor(self, player)
@@ -218,7 +218,7 @@ end
 
 --- Inserts stack into character's inventory or spills it at the character's position.
 -- @param stack SimpleItemStack
-local function return_to_character_or_spill(player, character, stack)
+function BaseEditor.return_to_character_or_spill(player, character, stack)
   local inserted = character.insert(stack)
   if inserted < stack.count then
     player.print({"inventory-restriction.player-inventory-full", game.item_prototypes[stack.name].localised_name})
@@ -229,12 +229,12 @@ local function return_to_character_or_spill(player, character, stack)
   return inserted
 end
 
-local function return_buffer_to_character(self, player_index, character, buffer)
+function BaseEditor:return_buffer_to_character(player_index, character, buffer)
   local player = game.players[player_index]
   for i=1,#buffer do
     local stack = buffer[i]
     if stack.valid_for_read then
-      local inserted = return_to_character_or_spill(player, character, stack)
+      local inserted = self.return_to_character_or_spill(player, character, stack)
       if is_stack_valid_for_editor(self, stack) then
         -- match editor player inventory to character inventory
         stack.count = inserted
@@ -258,7 +258,7 @@ local function on_player_built_underground_entity(self, player_index, entity, st
   end
 
   -- look for bpproxy ghost on the surface
-  local surface = aboveground_surface(self, entity.surface)
+  local surface = self:aboveground_surface_for_editor_surface(entity.surface)
   local bpproxy_ghosts = surface.find_entities_filtered{
     ghost_name = self.name.."-bpproxy-"..entity.name,
     position = entity.position,
@@ -269,14 +269,21 @@ local function on_player_built_underground_entity(self, player_index, entity, st
 end
 
 local function create_underground_entity(self, entity)
-  local underground_surface = editor_surface_for_aboveground_surface(self, entity.surface)
+  local underground_surface = self:editor_surface_for_aboveground_surface(entity.surface)
   if not underground_surface then return end
-  local underground_entity = underground_surface.create_entity{
+  local create_args = {
     name = nonproxy_name(self, entity.name),
     position = entity.position,
     force = entity.force,
     direction = entity.direction,
   }
+  if entity.type == "underground-belt" then
+    create_args.type = entity.belt_to_ground_type
+  elseif entity.type == "loader" then
+    create_args.type = entity.loader_type
+  end
+
+  local underground_entity = underground_surface.create_entity(create_args)
   entity.surface.create_entity{
     name = "flying-text",
     position = entity.position,
@@ -286,7 +293,7 @@ local function create_underground_entity(self, entity)
   return underground_entity
 end
 
-local function abort_build(creator, entity, stack, message)
+function BaseEditor.abort_build(creator, entity, stack, message)
   local inserted = creator.insert(stack)
   -- cannot insert directly into robots
   if inserted == 0 then creator.get_inventory(defines.inventory.robot_cargo).insert(stack) end
@@ -303,17 +310,17 @@ local function on_built_bpproxy(self, creator, entity, stack)
   if underground_entity then
     entity.destroy()
   else
-    abort_build(
+    self.abort_build(
       creator,
       entity,
       stack,
-      {"pipelayer-error.underground-obstructed"})
+      {self.name.."-error.underground-obstructed"})
   end
 end
 
 -- converts overworld bpproxy ghost to regular ghost underground
 local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
-  local editor_surface = editor_surface_for_aboveground_surface(self, ghost.surface)
+  local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
   if editor_surface.find_entity("entity-ghost", ghost.position) then
     ghost.destroy()
     return
@@ -339,7 +346,7 @@ local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
 end
 
 local function on_player_built_underground_ghost(self, ghost)
-  local surface = aboveground_surface(self, ghost.surface)
+  local surface = self:aboveground_surface_for_editor_surface(ghost.surface)
   surface.create_entity{
     name = "entity-ghost",
     inner_name = self.name.."-bpproxy-"..ghost.ghost_name,
@@ -352,14 +359,14 @@ end
 local function on_player_built_ghost(self, ghost)
   local name = nonproxy_name(self, ghost.ghost_name)
   if name then
-    if is_editor_surface(self, ghost.surface) then
+    if self:is_editor_surface(ghost.surface) then
       ghost.destroy()
       return
     else
       return on_player_built_surface_bpproxy_ghost(self, ghost, name)
     end
   end
-  if is_editor_surface(self, ghost.surface) then
+  if self:is_editor_surface(ghost.surface) then
     return on_player_built_underground_ghost(self, ghost)
   end
 end
@@ -423,7 +430,7 @@ end
 function BaseEditor:capture_underground_entities_in_blueprint(event)
   local player = game.players[event.player_index]
   local bp_surface = player.surface
-  local underground_surface = editor_surface_for_aboveground_surface(self, bp_surface)
+  local underground_surface = self:editor_surface_for_aboveground_surface(bp_surface)
 
   local bp = player.blueprint_to_setup
   if not bp or not bp.valid_for_read then bp = player.cursor_stack end
@@ -456,6 +463,8 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
     end
   end
   bp.set_blueprint_entities(bp_entities)
+
+  return bp
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -474,7 +483,7 @@ function BaseEditor:on_built_entity(event)
     stack = {name = item_for_entity(entity), count = 1}
   end
 
-  if is_editor_surface(self, surface) then
+  if self:is_editor_surface(surface) then
     on_player_built_underground_entity(self, player_index, entity, stack)
   elseif nonproxy_name(self, entity.name) then
     on_built_bpproxy(self, game.players[player_index], entity, stack)
@@ -483,11 +492,11 @@ end
 
 function BaseEditor:on_picked_up_item(event)
   local player = game.players[event.player_index]
-  if not is_editor_surface(self, player.surface) then return end
+  if not self:is_editor_surface(player.surface) then return end
   local character = self.player_state[event.player_index].character
   if character then
     local stack = event.item_stack
-    local inserted = return_to_character_or_spill(player, character, stack)
+    local inserted = self.return_to_character_or_spill(player, character, stack)
     local excess = stack.count - inserted
     if not is_stack_valid_for_editor(self, stack) then
       player.remove_item(stack)
@@ -505,7 +514,7 @@ function BaseEditor:on_player_mined_item(event)
     if character then
       local stack = event.item_stack
       local count = stack.count
-      local inserted = return_to_character_or_spill(player, character, stack)
+      local inserted = self.return_to_character_or_spill(player, character, stack)
       local excess = count - inserted
       if excess > 0 then
         -- try to match editor inventory to character inventory
@@ -518,10 +527,10 @@ end
 function BaseEditor:on_player_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
-  if is_editor_surface(self, surface) then
+  if self:is_editor_surface(surface) then
     local character = self.player_state[event.player_index].character
     if character then
-      return_buffer_to_character(self, event.player_index, character, event.buffer)
+      self:return_buffer_to_character(event.player_index, character, event.buffer)
     end
   end
 end
@@ -548,7 +557,9 @@ end
 ---------------------------------------------------------------------------------------------------
 -- Exports
 
-local M = {}
+local M = {
+  class = BaseEditor
+}
 
 local meta = {
   __index = BaseEditor
