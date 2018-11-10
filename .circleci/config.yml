@@ -2,17 +2,9 @@ version: 2
 jobs:
   build:
     docker:
-      - image: abaez/luarocks
+      - image: mspielberg/circleci-busted:5.2
     steps:
-      - run:
-          name: Install APKs
-          command: apk add --no-cache --update git
       - checkout
-      - run:
-          name: Install rocks
-          command: luarocks install busted && 
-                   luarocks install luafilesystem && 
-                   luarocks install serpent
       - run:
           name: Run unit tests
           command: busted -v
