@@ -1,4 +1,5 @@
 local BaseEditor = {}
+local serpent = require "serpent"
 
 ---------------------------------------------------------------------------------------------------
 -- Abstract methods to be overridden by subclasses
@@ -208,8 +209,12 @@ end
 ---------------------------------------------------------------------------------------------------
 -- ghost handling
 
+local function proxy_name(self, name)
+  return self.proxy_prefix..name
+end
+
 local function nonproxy_name(self, name)
-  local prefix = self.name.."-bpproxy-"
+  local prefix = self.proxy_prefix
   if name:sub(1, #prefix) ~= prefix then
     return nil
   end
@@ -260,7 +265,7 @@ local function on_player_built_underground_entity(self, player_index, entity, st
   -- look for bpproxy ghost on the surface
   local surface = self:aboveground_surface_for_editor_surface(entity.surface)
   local bpproxy_ghosts = surface.find_entities_filtered{
-    ghost_name = self.name.."-bpproxy-"..entity.name,
+    ghost_name = proxy_name(self, entity.name),
     position = entity.position,
   }
   for _, counterpart in ipairs(bpproxy_ghosts) do
@@ -355,7 +360,7 @@ local function on_player_built_underground_ghost(self, ghost)
   local surface = self:aboveground_surface_for_editor_surface(ghost.surface)
   local create_entity_args = {
     name = "entity-ghost",
-    inner_name = self.name.."-bpproxy-"..ghost.ghost_name,
+    inner_name = proxy_name(self, ghost.ghost_name),
     position = ghost.position,
     force = ghost.force,
     direction = ghost.direction
@@ -455,7 +460,7 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
   local ug_entities = find_in_area{surface = underground_surface, area = area}
   for _, ug_entity in ipairs(ug_entities) do
     if ug_entity.name ~= "entity-ghost" then
-      local name_in_bp = self.name.."-bpproxy-"..ug_entity.name
+      local name_in_bp = proxy_name(self, ug_entity.name)
       local entity_type = ug_entity.type
 
       local bp_entity = {
@@ -477,6 +482,109 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
   bp.set_blueprint_entities(bp_entities)
 
   return bp
+end
+
+---------------------------------------------------------------------------------------------------
+-- deconstruction
+
+local function surface_counterpart_entity(self, entity)
+  local name = proxy_name(self, entity.name)
+  local aboveground_surface = self:aboveground_surface_for_editor_surface(entity.surface)
+  return aboveground_surface.find_entity(name, entity.position)
+end
+
+local function underground_counterpart_entity(self, entity)
+  local name = nonproxy_name(self, entity.name)
+  local editor_surface = self:editor_surface_for_aboveground_surface(entity.surface)
+  return editor_surface.find_entity(name, entity.position)
+end
+
+local function create_deconstruction_proxy(self, entity, player)
+  local surface = self:aboveground_surface_for_editor_surface(entity.surface)
+  local args = {
+    name = proxy_name(self, entity.name),
+    position = entity.position,
+    direction = entity.direction,
+    force = entity.force,
+  }
+  if entity.type == "underground-belt" then
+    args.type = entity.belt_to_ground_type
+  elseif entity.type == "loader" then
+    args.type = entity.loader_type
+  end
+  local bpproxy_entity = surface.create_entity(args)
+  bpproxy_entity.destructible = false
+  bpproxy_entity.order_deconstruction(player.force, player)
+end
+
+local function on_canceled_bpproxy_deconstruction(self, entity, player)
+  local counterpart = underground_counterpart_entity(self, entity)
+  if counterpart and counterpart.to_be_deconstructed() then
+    local force = player and player.force or counterpart.force
+    counterpart.cancel_deconstruction(force, player)
+  end
+  entity.destroy()
+end
+
+local function on_canceled_underground_deconstruction(self, entity)
+  local counterpart = surface_counterpart_entity(self, entity)
+  if counterpart then
+    counterpart.destroy()
+  end
+end
+
+local function create_entity_filter(tool)
+  local set = {}
+  for _, item in pairs(tool.entity_filters) do
+    set[item] = true
+  end
+  if not next(set) then
+    return function(_) return true end
+  elseif tool.entity_filter_mode == defines.deconstruction_item.entity_filter_mode.blacklist then
+    return function(entity)
+      if entity.name == "entity-ghost" then
+        return not set[entity.ghost_name]
+      else
+        return not set[entity.name]
+      end
+    end
+  else
+    return function(entity)
+      if entity.name == "entity-ghost" then
+        return set[entity.ghost_name]
+      else
+        return set[entity.name]
+      end
+    end
+  end
+end
+
+local function order_underground_deconstruction(self, player, editor_surface, area, filter)
+  local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_surface)
+  local underground_entities = find_in_area{surface = editor_surface, area = area}
+  local to_deconstruct = {}
+  for _, entity in ipairs(underground_entities) do
+    if filter(entity) then
+      if entity.name == "entity-ghost" then
+        local ghosts = aboveground_surface.find_entities_filtered{
+          ghost_name = proxy_name(entity.name),
+          position = entity.position,
+        }
+        if ghosts[1] then ghosts[1].destroy() end
+        entity.destroy()
+      else
+        create_deconstruction_proxy(self, entity, player)
+        entity.order_deconstruction(player.force, player)
+        to_deconstruct[#to_deconstruct+1] = entity
+      end
+    end
+  end
+  return to_deconstruct
+end
+
+function BaseEditor:mark_underground_area_for_deconstruction(player, editor_surface, area, tool)
+  local filter = create_entity_filter(tool)
+  return order_underground_deconstruction(self, player, editor_surface, area, filter)
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -540,9 +648,13 @@ function BaseEditor:on_player_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
   if self:is_editor_surface(surface) then
+    -- print(serpent.line(self.player_state[event.player_index]))
     local character = self.player_state[event.player_index].character
     if character then
       self:return_buffer_to_character(event.player_index, character, event.buffer)
+    end
+    if entity.to_be_deconstructed() then
+      on_canceled_underground_deconstruction(self, entity)
     end
   end
 end
@@ -566,6 +678,22 @@ function BaseEditor:on_robot_built_entity(event)
   end
 end
 
+function BaseEditor:on_marked_for_deconstruction(event)
+  local entity = event.entity
+  if self:is_editor_surface(entity.surface) then
+    create_deconstruction_proxy(self, entity, game.players[event.player_index])
+  end
+end
+
+function BaseEditor:on_canceled_deconstruction(event)
+  local entity = event.entity
+  if nonproxy_name(self, entity.name) then
+    on_canceled_bpproxy_deconstruction(self, entity, game.players[event.player_index])
+  elseif self:is_editor_surface(entity.surface) then
+    on_canceled_underground_deconstruction(self, entity)
+  end
+end
+
 ---------------------------------------------------------------------------------------------------
 -- Exports
 
@@ -580,6 +708,7 @@ local meta = {
 function M.new(name)
   local self = {
     name = name,
+    proxy_prefix = name.."-bpproxy-",
     player_state = {},
     valid_editor_types = {},
   }

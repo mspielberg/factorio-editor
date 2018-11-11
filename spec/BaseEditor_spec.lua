@@ -6,6 +6,12 @@ local function export_mocks(env, args)
     build_check_type = {
       ghost_place = {},
     },
+    deconstruction_item = {
+      entity_filter_mode = {
+        blacklist = {},
+        whitelist = {},
+      }
+    },
     inventory = {
       robot_cargo = 1,
     },
@@ -42,6 +48,7 @@ local function export_mocks(env, args)
     clean_cursor = function() return true end,
     character = character,
     connected = true,
+    force = "player",
     get_item_count = function(name)
       if player.character then return player.character.get_item_count(name)
       else
@@ -114,6 +121,7 @@ local function export_mocks(env, args)
     position = {x=2, y=2},
     prototype = entity_prototypes.validentity,
     surface = editor_surface,
+    to_be_deconstructed = function() return false end,
   }
 
   editor_surface.find_entities_filtered = spy.new(function()
@@ -652,12 +660,13 @@ describe("A BaseEditor", function()
       end)
 
       describe("constructs underground entity when bpproxy is built", function()
-        local function validate()
+        local function validate(type)
           assert.spy(editor_surface.create_entity).was.called_with{
             name = "validentity",
             position = surface_ghost.position,
             direction = surface_ghost.direction,
             force = surface_ghost.force,
+            type = type,
           }
           assert.stub(nauvis.create_entity).was.called_with{
             name = "flying-text",
@@ -716,21 +725,7 @@ describe("A BaseEditor", function()
             created_entity = bpproxy_entity,
             stack = { name = "validitem", count = 1},
           }
-
-          assert.spy(editor_surface.create_entity).was.called_with{
-            name = "validentity",
-            position = surface_ghost.position,
-            direction = surface_ghost.direction,
-            force = surface_ghost.force,
-            type = "input",
-          }
-          assert.stub(nauvis.create_entity).was.called_with{
-            name = "flying-text",
-            position = bpproxy_entity.position,
-            text = {"testeditor-message.created-underground", {"validentity-localised"}}
-          }
-          assert.stub(bpproxy_entity.destroy).was.called()
-          assert.stub(invalid_field_access_stub).was_not.called()
+          validate("input")
         end)
 
         it("copies loader_type for loader entities", function()
@@ -744,22 +739,186 @@ describe("A BaseEditor", function()
             created_entity = bpproxy_entity,
             stack = { name = "validitem", count = 1},
           }
+          validate("input")
+        end)
+      end)
+    end)
+  end)
 
-          assert.spy(editor_surface.create_entity).was.called_with{
-            name = "validentity",
-            position = surface_ghost.position,
-            direction = surface_ghost.direction,
-            force = surface_ghost.force,
+  describe("handles deconstruction", function()
+    local position = {x = 0, y = 0}
+    local bpproxy_entity
+    local editor_entity
+    before_each(function()
+      bpproxy_entity = {
+        valid = true,
+        name = "testeditor-bpproxy-validentity", type = "validtype",
+        force = "player",
+        surface = nauvis,
+        position = position,
+        direction = 0,
+        to_be_deconstructed = spy.new(function() return true end),
+        order_deconstruction = stub(),
+        destroy = stub(),
+      }
+      editor_entity = {
+        valid = true,
+        name = "validentity",
+        type = "validtype",
+        force = "player",
+        surface = editor_surface,
+        position = position,
+        direction = 0,
+        to_be_deconstructed = spy.new(function() return true end),
+        order_deconstruction = stub(),
+        cancel_deconstruction = stub(),
+      }
+    end)
+
+    describe("creates bpproxy entities when", function()
+      describe("using a deconstruction item above ground", function()
+        local tool = {
+          valid = true,
+          valid_for_read = true,
+          is_deconstruction_item = true,
+          entity_filter_mode = defines.deconstruction_item.entity_filter_mode.whitelist,
+          entity_filters = {},
+        }
+        local function test_with_tool(should_deconstruct)
+          editor_surface.find_entities_filtered = spy.new(function() return {editor_entity} end)
+          nauvis.create_entity = spy.new(function() return bpproxy_entity end)
+          local area = {left_top = {x=-10, y=-10}, right_bottom = {x=10,y=10}}
+          uut:mark_underground_area_for_deconstruction(p, editor_surface, area, tool)
+          assert.spy(editor_surface.find_entities_filtered).was.called_with{
+            area = area,
+          }
+
+          if should_deconstruct then
+            assert.spy(nauvis.create_entity).was.called_with{
+              name = "testeditor-bpproxy-validentity",
+              position = position,
+              force = "player",
+              direction = 0,
+            }
+            assert.spy(bpproxy_entity.order_deconstruction).was.called_with(p.force, p)
+            assert.spy(editor_entity.order_deconstruction).was.called_with(p.force, p)
+          else
+            assert.spy(nauvis.create_entity).was_not.called()
+            assert.spy(bpproxy_entity.order_deconstruction).was_not.called()
+            assert.spy(editor_entity.order_deconstruction).was_not.called()
+          end
+        end
+
+        it("with no filter set", function()
+          test_with_tool(true)
+        end)
+
+        it("with matching whitelist", function()
+          tool.entity_filters = {"validentity"}
+          test_with_tool(true)
+        end)
+
+        it("with whitelist that does not match", function()
+          tool.entity_filters = {"badentity"}
+          test_with_tool(false)
+        end)
+
+        it("with empty blacklist", function()
+          tool.entity_filter_mode = defines.deconstruction_item.entity_filter_mode.blacklist
+          test_with_tool(true)
+        end)
+
+        it("with entity blacklisted", function()
+          tool.entity_filter_mode = defines.deconstruction_item.entity_filter_mode.blacklist
+          tool.entity_filters = {"validentity"}
+          test_with_tool(false)
+        end)
+      end)
+
+      describe("using a deconstruction item underground", function()
+        it("on standard entity", function()
+          nauvis.create_entity = spy.new(function() return bpproxy_entity end)
+          uut:on_marked_for_deconstruction{
+            player_index = 1,
+            entity = editor_entity,
+          }
+          assert.spy(nauvis.create_entity).was.called_with{
+            name = "testeditor-bpproxy-validentity",
+            position = position,
+            force = "player",
+            direction = 0,
+          }
+          assert.spy(bpproxy_entity.order_deconstruction).was.called_with(p.force, p)
+        end)
+
+        it("on underground-belt", function()
+          editor_entity.type = "underground-belt"
+          editor_entity.belt_to_ground_type = "input"
+          nauvis.create_entity = spy.new(function() return bpproxy_entity end)
+          uut:on_marked_for_deconstruction{
+            player_index = 1,
+            entity = editor_entity,
+          }
+          assert.spy(nauvis.create_entity).was.called_with{
+            name = "testeditor-bpproxy-validentity",
+            position = position,
+            force = "player",
+            direction = 0,
             type = "input",
           }
-          assert.stub(nauvis.create_entity).was.called_with{
-            name = "flying-text",
-            position = bpproxy_entity.position,
-            text = {"testeditor-message.created-underground", {"validentity-localised"}}
-          }
-          assert.stub(bpproxy_entity.destroy).was.called()
-          assert.stub(invalid_field_access_stub).was_not.called()
         end)
+
+        it("on loader", function()
+          editor_entity.type = "loader"
+          editor_entity.loader_type = "input"
+          nauvis.create_entity = spy.new(function() return bpproxy_entity end)
+          uut:on_marked_for_deconstruction{
+            player_index = 1,
+            entity = editor_entity,
+          }
+          assert.spy(nauvis.create_entity).was.called_with{
+            name = "testeditor-bpproxy-validentity",
+            position = position,
+            force = "player",
+            direction = 0,
+            type = "input",
+          }
+        end)
+      end)
+    end)
+
+    describe("destroys bpproxy entities when ", function()
+      it("unmarking underground entities", function()
+        nauvis.find_entity = spy.new(function() return bpproxy_entity end)
+        uut:on_canceled_deconstruction{
+          player_index = 1,
+          entity = editor_entity,
+        }
+        assert.spy(nauvis.find_entity).was.called_with("testeditor-bpproxy-validentity", position)
+        assert.stub(bpproxy_entity.destroy).was.called()
+      end)
+
+      it("mining marked underground entities", function()
+        uut:toggle_editor_status_for_player(1)
+        nauvis.find_entity = spy.new(function() return bpproxy_entity end)
+        uut:on_player_mined_entity{
+          player_index = 1,
+          entity = editor_entity,
+          buffer = mocks.buffer,
+        }
+        assert.spy(nauvis.find_entity).was.called_with("testeditor-bpproxy-validentity", position)
+        assert.stub(bpproxy_entity.destroy).was.called()
+      end)
+
+      it("unmarking bpproxy entities", function()
+        editor_surface.find_entity = spy.new(function() return editor_entity end)
+        uut:on_canceled_deconstruction{
+          player_index = 1,
+          entity = bpproxy_entity,
+        }
+        assert.spy(editor_surface.find_entity).was.called_with("validentity", position)
+        assert.stub(bpproxy_entity.destroy).was.called()
+        assert.spy(editor_entity.cancel_deconstruction).was.called_with(p.force, p)
       end)
     end)
   end)
