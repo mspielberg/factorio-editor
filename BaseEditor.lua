@@ -487,7 +487,7 @@ end
 ---------------------------------------------------------------------------------------------------
 -- deconstruction
 
-local function surface_counterpart_entity(self, entity)
+function BaseEditor:surface_counterpart_bpproxy(entity)
   local name = proxy_name(self, entity.name)
   local aboveground_surface = self:aboveground_surface_for_editor_surface(entity.surface)
   return aboveground_surface.find_entity(name, entity.position)
@@ -527,7 +527,7 @@ local function on_canceled_bpproxy_deconstruction(self, entity, player)
 end
 
 local function on_canceled_underground_deconstruction(self, entity)
-  local counterpart = surface_counterpart_entity(self, entity)
+  local counterpart = self:surface_counterpart_bpproxy(entity)
   if counterpart then
     counterpart.destroy()
   end
@@ -559,7 +559,8 @@ local function create_entity_filter(tool)
   end
 end
 
-local function order_underground_deconstruction(self, player, editor_surface, area, filter)
+function BaseEditor:order_underground_deconstruction(player, editor_surface, area, tool)
+  local filter = create_entity_filter(tool)
   local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_surface)
   local underground_entities = find_in_area{surface = editor_surface, area = area}
   local to_deconstruct = {}
@@ -580,11 +581,6 @@ local function order_underground_deconstruction(self, player, editor_surface, ar
     end
   end
   return to_deconstruct
-end
-
-function BaseEditor:mark_underground_area_for_deconstruction(player, editor_surface, area, tool)
-  local filter = create_entity_filter(tool)
-  return order_underground_deconstruction(self, player, editor_surface, area, filter)
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -648,13 +644,28 @@ function BaseEditor:on_player_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
   if self:is_editor_surface(surface) then
-    -- print(serpent.line(self.player_state[event.player_index]))
     local character = self.player_state[event.player_index].character
     if character then
       self:return_buffer_to_character(event.player_index, character, event.buffer)
     end
     if entity.to_be_deconstructed() then
       on_canceled_underground_deconstruction(self, entity)
+    end
+  elseif self:is_valid_aboveground_surface(surface) then
+    local editor_entity = underground_counterpart_entity(self, entity)
+    if editor_entity then
+      editor_entity.destroy()
+    end
+  end
+end
+
+function BaseEditor:on_robot_mined_entity(event)
+  local entity = event.entity
+  local surface = entity.surface
+  if self:is_valid_aboveground_surface(surface) then
+    local editor_entity = underground_counterpart_entity(self, entity)
+    if editor_entity then
+      editor_entity.destroy()
     end
   end
 end

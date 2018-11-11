@@ -769,6 +769,7 @@ describe("A BaseEditor", function()
         surface = editor_surface,
         position = position,
         direction = 0,
+        destroy = stub(),
         to_be_deconstructed = spy.new(function() return true end),
         order_deconstruction = stub(),
         cancel_deconstruction = stub(),
@@ -788,7 +789,7 @@ describe("A BaseEditor", function()
           editor_surface.find_entities_filtered = spy.new(function() return {editor_entity} end)
           nauvis.create_entity = spy.new(function() return bpproxy_entity end)
           local area = {left_top = {x=-10, y=-10}, right_bottom = {x=10,y=10}}
-          uut:mark_underground_area_for_deconstruction(p, editor_surface, area, tool)
+          uut:order_underground_deconstruction(p, editor_surface, area, tool)
           assert.spy(editor_surface.find_entities_filtered).was.called_with{
             area = area,
           }
@@ -919,6 +920,30 @@ describe("A BaseEditor", function()
         assert.spy(editor_surface.find_entity).was.called_with("validentity", position)
         assert.stub(bpproxy_entity.destroy).was.called()
         assert.spy(editor_entity.cancel_deconstruction).was.called_with(p.force, p)
+      end)
+    end)
+
+    describe("destroys underground entity when mining a bpproxy", function()
+      it("by hand", function()
+        editor_surface.find_entity = spy.new(function() return editor_entity end)
+        uut:on_player_mined_entity{
+          player_index = 1,
+          entity = bpproxy_entity,
+          buffer = mocks.buffer
+        }
+        assert.spy(editor_surface.find_entity).was.called_with("validentity", position)
+        assert.spy(editor_entity.destroy).was.called()
+      end)
+
+      it("by robot", function()
+        editor_surface.find_entity = spy.new(function() return editor_entity end)
+        uut:on_robot_mined_entity{
+          player_index = 1,
+          entity = bpproxy_entity,
+          buffer = mocks.buffer
+        }
+        assert.spy(editor_surface.find_entity).was.called_with("validentity", position)
+        assert.stub(editor_entity.destroy).was.called()
       end)
     end)
   end)
