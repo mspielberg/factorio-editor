@@ -206,6 +206,29 @@ local function sync_player_inventories(self)
   end
 end
 
+local transport_line_counts = {
+  ["loader"] = 2,
+  ["splitter"] = 8,
+  ["transport-belt"] = 2,
+  ["underground-belt"] = 4,
+}
+
+local function return_transport_line_to_buffer(tl, buffer)
+  for j=1,#tl do
+    buffer.insert(tl[j])
+  end
+  tl.clear()
+end
+
+local function return_contents_to_buffer(entity, buffer)
+  local n = transport_line_counts[entity.type]
+  if n then
+    for i=1,n do
+      return_transport_line_to_buffer(entity.get_transport_line(i), buffer)
+    end
+  end
+end
+
 ---------------------------------------------------------------------------------------------------
 -- ghost handling
 
@@ -659,6 +682,7 @@ function BaseEditor:on_player_mined_entity(event)
   elseif self:is_valid_aboveground_surface(surface) then
     local editor_entity = underground_counterpart_entity(self, entity)
     if editor_entity then
+      return_contents_to_buffer(editor_entity, event.buffer)
       editor_entity.destroy()
     end
   end
@@ -670,6 +694,7 @@ function BaseEditor:on_robot_mined_entity(event)
   if self:is_valid_aboveground_surface(surface) then
     local editor_entity = underground_counterpart_entity(self, entity)
     if editor_entity then
+      return_contents_to_buffer(editor_entity, event.buffer)
       editor_entity.destroy()
     end
   end

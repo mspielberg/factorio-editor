@@ -984,6 +984,140 @@ describe("A BaseEditor", function()
         assert.spy(editor_surface.find_entity).was_not.called()
       end)
     end)
+  end)
 
+  describe("returns contents of mined", function()
+    local buffer
+    local position = {}
+    local bpproxy = {
+      name = "testeditor-bpproxy-transport-belt",
+      surface = nauvis,
+      position = position,
+    }
+    before_each(function()
+      buffer = mocks.buffer
+      buffer.insert = stub()
+    end)
+    local function create_tl()
+      return {
+        [1] = {
+          valid = true,
+          valid_for_read = true,
+          name = "iron-plate",
+          count = 1,
+        },
+        clear = stub(),
+      }
+    end
+
+    local belt_entity
+    local transport_lines
+    local function validate()
+      assert.spy(editor_surface.find_entity).was.called_with(belt_entity.name, position)
+      for _, line in ipairs(transport_lines) do
+        assert.spy(mocks.buffer.insert).was.called_with(line[1])
+        assert.stub(line.clear).was.called()
+      end
+      assert.stub(belt_entity.destroy).was.called()
+    end
+
+    describe("transport belt", function()
+      before_each(function()
+        transport_lines = {create_tl(), create_tl()}
+        belt_entity = {
+          valid = true,
+          name = "transport-belt",
+          type = "transport-belt",
+          surface = editor_surface,
+          position = position,
+          get_transport_line = function(i) return transport_lines[i] end,
+          destroy = stub(),
+        }
+        editor_surface.find_entity = spy.new(function() return belt_entity end)
+      end)
+
+      it("when mined by hand", function()
+        uut:on_player_mined_entity{
+          entity = bpproxy,
+          buffer = mocks.buffer,
+        }
+        validate()
+      end)
+
+      it("when mined by robot", function()
+        uut:on_robot_mined_entity{
+          entity = bpproxy,
+          buffer = mocks.buffer,
+        }
+        validate()
+      end)
+    end)
+
+    describe("underground belt", function()
+      before_each(function()
+        bpproxy.name = "testeditor-bpproxy-underground-belt"
+        transport_lines = {create_tl(), create_tl(), create_tl(), create_tl()}
+        belt_entity = {
+          valid = true,
+          name = "underground-belt",
+          type = "underground-belt",
+          surface = editor_surface,
+          position = position,
+          get_transport_line = function(i) return transport_lines[i] end,
+          destroy = stub(),
+        }
+        editor_surface.find_entity = spy.new(function() return belt_entity end)
+      end)
+
+      it("when mined by hand", function()
+        uut:on_player_mined_entity{
+          entity = bpproxy,
+          buffer = mocks.buffer,
+        }
+        validate()
+      end)
+
+      it("when mined by robot", function()
+        uut:on_robot_mined_entity{
+          entity = bpproxy,
+          buffer = mocks.buffer,
+        }
+        validate()
+      end)
+    end)
+
+    describe("splitter", function()
+      before_each(function()
+        bpproxy.name = "testeditor-bpproxy-splitter"
+        transport_lines = {}
+        for i=1,8 do transport_lines[i] = create_tl() end
+        belt_entity = {
+          valid = true,
+          name = "splitter",
+          type = "splitter",
+          surface = editor_surface,
+          position = position,
+          get_transport_line = function(i) return transport_lines[i] end,
+          destroy = stub(),
+        }
+        editor_surface.find_entity = spy.new(function() return belt_entity end)
+      end)
+
+      it("when mined by hand", function()
+        uut:on_player_mined_entity{
+          entity = bpproxy,
+          buffer = mocks.buffer,
+        }
+        validate()
+      end)
+
+      it("when mined by robot", function()
+        uut:on_robot_mined_entity{
+          entity = bpproxy,
+          buffer = mocks.buffer,
+        }
+        validate()
+      end)
+    end)
   end)
 end)
