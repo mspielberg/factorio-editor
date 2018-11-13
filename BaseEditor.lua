@@ -221,6 +221,10 @@ local function nonproxy_name(self, name)
   return name:sub(#prefix+1)
 end
 
+local function has_proxy(self, name)
+  return game.entity_prototypes[proxy_name(self, name)] ~= nil
+end
+
 --- Inserts stack into character's inventory or spills it at the character's position.
 -- @param stack SimpleItemStack
 function BaseEditor.return_to_character_or_spill(player, character, stack)
@@ -691,7 +695,7 @@ end
 
 function BaseEditor:on_marked_for_deconstruction(event)
   local entity = event.entity
-  if self:is_editor_surface(entity.surface) then
+  if self:is_editor_surface(entity.surface) and has_proxy(self, entity.name) then
     create_deconstruction_proxy(self, entity, game.players[event.player_index])
   end
 end

@@ -83,6 +83,7 @@ local function export_mocks(env, args)
 
   local entity_prototypes = {
     validentity = { type = "validtype", items_to_place_this = {}, localised_name = {"validentity-localised"} },
+    ["testeditor-bpproxy-validentity"] = { type = "validtype", items_to_place_this = {}, localised_name = {"validentity-localised"} },
   }
 
   local item_prototypes = {
@@ -752,7 +753,8 @@ describe("A BaseEditor", function()
     before_each(function()
       bpproxy_entity = {
         valid = true,
-        name = "testeditor-bpproxy-validentity", type = "validtype",
+        name = "testeditor-bpproxy-validentity",
+        type = "validtype",
         force = "player",
         surface = nauvis,
         position = position,
@@ -885,6 +887,20 @@ describe("A BaseEditor", function()
             type = "input",
           }
         end)
+      end)
+    end)
+
+    describe("does not create bpproxy entities when", function()
+      it("an underground entity with no proxy (e.g. a connector) is marked", function()
+        local badentity = {
+          valid = true,
+          name = "badentity",
+          position = {0,0},
+          surface = editor_surface,
+        }
+        nauvis.create_entity = stub()
+        uut:on_marked_for_deconstruction{ entity = badentity }
+        assert.stub(nauvis.create_entity).was_not.called()
       end)
     end)
 
