@@ -888,7 +888,7 @@ describe("A BaseEditor", function()
       end)
     end)
 
-    describe("destroys bpproxy entities when ", function()
+    describe("destroys bpproxy entities when", function()
       it("unmarking underground entities", function()
         nauvis.find_entity = spy.new(function() return bpproxy_entity end)
         uut:on_canceled_deconstruction{
