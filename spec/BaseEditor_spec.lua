@@ -895,7 +895,7 @@ describe("A BaseEditor", function()
         local badentity = {
           valid = true,
           name = "badentity",
-          position = {0,0},
+          position = position,
           surface = editor_surface,
         }
         nauvis.create_entity = stub()
@@ -962,5 +962,28 @@ describe("A BaseEditor", function()
         assert.stub(editor_entity.destroy).was.called()
       end)
     end)
+
+    describe("ignores surface entities that are not proxies when mined", function()
+      local badentity = {
+        valid = true,
+        name = "badentity",
+        surface = nauvis,
+        position = position,
+      }
+      before_each(function()
+        editor_surface.find_entity = stub()
+      end)
+
+      it("by hand", function()
+        uut:on_player_mined_entity{entity = badentity}
+        assert.spy(editor_surface.find_entity).was_not.called()
+      end)
+
+      it("by hand", function()
+        uut:on_robot_mined_entity{entity = badentity}
+        assert.spy(editor_surface.find_entity).was_not.called()
+      end)
+    end)
+
   end)
 end)

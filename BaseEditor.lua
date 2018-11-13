@@ -499,6 +499,7 @@ end
 
 local function underground_counterpart_entity(self, entity)
   local name = nonproxy_name(self, entity.name)
+  if not name then return nil end
   local editor_surface = self:editor_surface_for_aboveground_surface(entity.surface)
   return editor_surface.find_entity(name, entity.position)
 end
