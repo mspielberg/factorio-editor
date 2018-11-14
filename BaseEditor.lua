@@ -295,8 +295,8 @@ local function on_player_built_underground_entity(self, player_index, entity, st
     ghost_name = proxy_name(self, entity.name),
     position = entity.position,
   }
-  for _, counterpart in ipairs(bpproxy_ghosts) do
-    counterpart.destroy()
+  for _, bpproxy_ghost in ipairs(bpproxy_ghosts) do
+    bpproxy_ghost.destroy()
   end
 end
 
@@ -337,14 +337,14 @@ function BaseEditor.abort_build(creator, entity, stack, message)
   entity.destroy()
 end
 
-local function on_built_bpproxy(self, creator, entity, stack)
-  local underground_entity = create_underground_entity(self, entity)
+local function on_built_bpproxy(self, creator, bpproxy, stack)
+  local underground_entity = create_underground_entity(self, bpproxy)
   if underground_entity then
-    entity.destroy()
+    bpproxy.destroy()
   else
     self.abort_build(
       creator,
-      entity,
+      bpproxy,
       stack,
       {self.name.."-error.underground-obstructed"})
   end
