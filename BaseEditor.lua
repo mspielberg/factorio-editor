@@ -547,7 +547,7 @@ end
 
 local function on_canceled_bpproxy_deconstruction(self, entity, player)
   local counterpart = underground_counterpart_entity(self, entity)
-  if counterpart and counterpart.to_be_deconstructed() then
+  if counterpart and counterpart.to_be_deconstructed(counterpart.force) then
     local force = player and player.force or counterpart.force
     counterpart.cancel_deconstruction(force, player)
   end
@@ -601,7 +601,7 @@ function BaseEditor:order_underground_deconstruction(player, editor_surface, are
         }
         if ghosts[1] then ghosts[1].destroy() end
         entity.destroy()
-      else
+      elseif has_proxy(self, entity.name) then
         create_deconstruction_proxy(self, entity, player)
         entity.order_deconstruction(player.force, player)
         to_deconstruct[#to_deconstruct+1] = entity
@@ -676,7 +676,7 @@ function BaseEditor:on_player_mined_entity(event)
     if character then
       self:return_buffer_to_character(event.player_index, character, event.buffer)
     end
-    if entity.to_be_deconstructed() then
+    if entity.to_be_deconstructed(entity.force) then
       on_canceled_underground_deconstruction(self, entity)
     end
   elseif self:is_valid_aboveground_surface(surface) then

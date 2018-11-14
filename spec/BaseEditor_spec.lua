@@ -184,7 +184,7 @@ describe("A BaseEditor", function()
     editor_surface = mocks.editor_surface
     nauvis = mocks.nauvis
     uut = BaseEditor.new("testeditor")
-    uut.valid_editor_types[1] = "validtype"
+    uut.valid_editor_types = {"validtype"}
   end)
 
   describe("creates editor surfaces", function()
@@ -776,19 +776,22 @@ describe("A BaseEditor", function()
         order_deconstruction = stub(),
         cancel_deconstruction = stub(),
       }
+      editor_surface.find_entities_filtered = spy.new(function() return {editor_entity} end)
     end)
 
     describe("creates bpproxy entities when", function()
       describe("using a deconstruction item above ground", function()
-        local tool = {
-          valid = true,
-          valid_for_read = true,
-          is_deconstruction_item = true,
-          entity_filter_mode = defines.deconstruction_item.entity_filter_mode.whitelist,
-          entity_filters = {},
-        }
+        local tool
+        before_each(function()
+          tool = {
+            valid = true,
+            valid_for_read = true,
+            is_deconstruction_item = true,
+            entity_filter_mode = defines.deconstruction_item.entity_filter_mode.whitelist,
+            entity_filters = {},
+          }
+        end)
         local function test_with_tool(should_deconstruct)
-          editor_surface.find_entities_filtered = spy.new(function() return {editor_entity} end)
           nauvis.create_entity = spy.new(function() return bpproxy_entity end)
           local area = {left_top = {x=-10, y=-10}, right_bottom = {x=10,y=10}}
           uut:order_underground_deconstruction(p, editor_surface, area, tool)
@@ -834,6 +837,17 @@ describe("A BaseEditor", function()
         it("with entity blacklisted", function()
           tool.entity_filter_mode = defines.deconstruction_item.entity_filter_mode.blacklist
           tool.entity_filters = {"validentity"}
+          test_with_tool(false)
+        end)
+
+        it("ignores underground entities have no available proxy (e.g. connectors)", function()
+          local badentity = {
+            valid = true,
+            name = "badentity",
+            position = position,
+            surface = editor_surface,
+          }
+          editor_surface.find_entities_filtered = spy.new(function() return {badentity} end)
           test_with_tool(false)
         end)
       end)
