@@ -18,8 +18,6 @@ local function editor_autoplace_control()
       return control
     end
   end
-  -- pick arbitrary terrain
-  return next(game.autoplace_control_prototypes)
 end
 
 local function editor_surface_name(self, aboveground_surface_name)
@@ -31,6 +29,22 @@ end
 
 local function create_editor_surface(self, name)
   local autoplace_control = editor_autoplace_control()
+  local autoplace_controls, tile_settings
+  if autoplace_control then
+    autoplace_controls = {
+      [autoplace_control] = {
+        frequency = "very-low",
+        size = "very-high",
+      }
+    }
+  else
+    tile_settings = {
+      ["sand-1"] = {
+        frequency = "very-low",
+        size = "very-high",
+      }
+    }
+  end
   local surface = game.create_surface(
     name,
     {
@@ -38,15 +52,11 @@ local function create_editor_surface(self, name)
       water = "none",
       cliff_settings = { cliff_elevation_0 = 1024 },
       default_enable_all_autoplace_controls = false,
-      autoplace_controls = {
-        [autoplace_control] = {
-          frequency = "very-low",
-          size = "very-high",
-        },
-      },
+      autoplace_controls = autoplace_controls,
       autoplace_settings = {
         decorative = { treat_missing_as_default = false },
         entity = { treat_missing_as_default = false },
+        tile = { treat_missing_as_default = false, settings = tile_settings },
       },
     }
   )

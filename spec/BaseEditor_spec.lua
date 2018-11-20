@@ -205,6 +205,23 @@ describe("A BaseEditor", function()
       assert.spy(g.create_surface).was.called_with("testeditor", match._)
       assert.spy(p.teleport).was.called_with(p.position, g.surfaces.testeditor)
     end)
+
+    it("uses sand tiles as fallback if no dirt autoplace control is available", function()
+      g.autoplace_control_prototypes = {}
+      uut:toggle_editor_status_for_player(1)
+      local has_tile_setting = function(state, arguments)
+        local tile_name = arguments[1]
+        return function(value)
+          return type(value) == "table" and
+            value.autoplace_settings and
+            value.autoplace_settings.tile and
+            value.autoplace_settings.tile.settings and
+            type(value.autoplace_settings.tile.settings[tile_name]) == "table"
+        end
+      end
+      assert:register("matcher", "has_tile_setting", has_tile_setting)
+      assert.spy(g.create_surface).was_called_with("testeditor", match.has_tile_setting("sand-1"))
+    end)
   end)
 
   describe("moves players between existing surfaces", function()
