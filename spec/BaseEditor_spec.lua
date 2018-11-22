@@ -361,6 +361,36 @@ describe("A BaseEditor", function()
       uut:capture_underground_entities_in_blueprint{ player_index = 1, area = area }
       assert.spy(editor_surface.find_entities_filtered).was_not.called()
     end)
+
+    it("ignores entities like connectors with no bpproxy", function()
+      bp.get_blueprint_entities = function()
+        return {
+          {
+            entity_number = 1,
+            name = "badentity",
+            position = {x=0, y=0},
+          }
+        }
+      end
+      p.blueprint_to_setup = bp
+      spy.on(bp, "set_blueprint_entities")
+      local area = { left_top = {x=-10, y=-10}, right_bottom = {x=10, y=10} }
+      local bad_editor_entity = {
+        valid = true,
+        name = "badentity",
+        position = {x=2, y=2},
+        surface = editor_surface,
+      }
+      editor_surface.find_entities_filtered = function() return {bad_editor_entity} end
+      uut:capture_underground_entities_in_blueprint{ player_index = 1, area = area }
+      assert.spy(bp.set_blueprint_entities).was.called_with{
+        {
+          entity_number = 1,
+          name = "badentity",
+          position = {x=0, y=0},
+        },
+      }
+    end)
   end)
 
   describe("manages ghosts", function()

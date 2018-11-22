@@ -498,22 +498,24 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
   for _, ug_entity in ipairs(ug_entities) do
     if ug_entity.name ~= "entity-ghost" then
       local name_in_bp = proxy_name(self, ug_entity.name)
-      local entity_type = ug_entity.type
+      if game.entity_prototypes[name_in_bp] then
+        local entity_type = ug_entity.type
 
-      local bp_entity = {
-        entity_number = #bp_entities + 1,
-        name = name_in_bp,
-        position = world_to_bp(ug_entity.position),
-        direction = ug_entity.direction,
-      }
+        local bp_entity = {
+          entity_number = #bp_entities + 1,
+          name = name_in_bp,
+          position = world_to_bp(ug_entity.position),
+          direction = ug_entity.direction,
+        }
 
-      if entity_type == "underground-belt" then
-        bp_entity.type = ug_entity.belt_to_ground_type
-      elseif entity_type == "loader" then
-        bp_entity.type = ug_entity.loader_type
+        if entity_type == "underground-belt" then
+          bp_entity.type = ug_entity.belt_to_ground_type
+        elseif entity_type == "loader" then
+          bp_entity.type = ug_entity.loader_type
+        end
+
+        bp_entities[#bp_entities + 1] = bp_entity
       end
-
-      bp_entities[#bp_entities + 1] = bp_entity
     end
   end
   bp.set_blueprint_entities(bp_entities)
