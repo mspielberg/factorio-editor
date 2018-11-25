@@ -466,8 +466,12 @@ end
 
 local function bp_position_transforms(bp_entities, surface, area)
   local bp_anchor = bp_entities[1]
+  if not bp_anchor then return end
   local world_anchor = find_in_area{surface = surface, area = area, name = bp_anchor.name, limit = 1}[1]
-  if not world_anchor then return nil end
+  if not world_anchor then
+    world_anchor = find_in_area{surface = surface, area = area, ghost_name = bp_anchor.name, limit = 1}[1]
+  end
+  if not world_anchor then return end
 
   local x_offset = world_anchor.position.x - bp_anchor.position.x
   local y_offset = world_anchor.position.y - bp_anchor.position.y
@@ -481,45 +485,86 @@ local function bp_position_transforms(bp_entities, surface, area)
   return bp_to_world, world_to_bp
 end
 
+local function convert_bp_entities_to_bpproxies(self, bp_entities)
+  local write_cursor = 1
+  for read_cursor, bp_entity in ipairs(bp_entities) do
+    bp_entities[read_cursor] = nil
+    local name_in_bp = proxy_name(self, bp_entity.name)
+    if game.entity_prototypes[name_in_bp] then
+      bp_entity.name = name_in_bp
+      bp_entity.entity_number = write_cursor
+      bp_entities[write_cursor] = bp_entity
+      write_cursor = write_cursor + 1
+    end
+  end
+end
+
+local function create_temporary_stack()
+  local chest = game.surfaces.nauvis.create_entity{
+    name = "wooden-chest",
+    position = {0, 0},
+  }
+  local stack = chest.get_inventory(defines.inventory.chest)[1]
+  stack.set_stack{name = "blueprint", count = 1}
+  return chest, stack
+end
+
+--- Captures all entities both above ground and in the editor in a single blueprint.
 function BaseEditor:capture_underground_entities_in_blueprint(event)
   local player = game.players[event.player_index]
   local bp_surface = player.surface
-  local underground_surface = self:editor_surface_for_aboveground_surface(bp_surface)
-
   local bp = player.blueprint_to_setup
   if not bp or not bp.valid_for_read then bp = player.cursor_stack end
-  local bp_entities = bp.get_blueprint_entities()
-  if not bp_entities or not next(bp_entities) then return end
   local area = event.area
 
-  local _, world_to_bp = bp_position_transforms(bp_entities, bp_surface, area)
-
-  local ug_entities = find_in_area{surface = underground_surface, area = area}
-  for _, ug_entity in ipairs(ug_entities) do
-    if ug_entity.name ~= "entity-ghost" then
-      local name_in_bp = proxy_name(self, ug_entity.name)
-      if game.entity_prototypes[name_in_bp] then
-        local entity_type = ug_entity.type
-
-        local bp_entity = {
-          entity_number = #bp_entities + 1,
-          name = name_in_bp,
-          position = world_to_bp(ug_entity.position),
-          direction = ug_entity.direction,
-        }
-
-        if entity_type == "underground-belt" then
-          bp_entity.type = ug_entity.belt_to_ground_type
-        elseif entity_type == "loader" then
-          bp_entity.type = ug_entity.loader_type
-        end
-
-        bp_entities[#bp_entities + 1] = bp_entity
-      end
-    end
+  local aboveground_bp, editor_bp, temporary_chest, aboveground_surface, editor_surface
+  if self:is_editor_surface(bp_surface) then
+    aboveground_surface = self:aboveground_surface_for_editor_surface(bp_surface)
+    editor_surface = bp_surface
+    editor_bp = bp
+    temporary_chest, aboveground_bp = create_temporary_stack()
+    aboveground_bp.create_blueprint{
+      surface = aboveground_surface,
+      area = area,
+      force = player.force,
+    }
+  elseif self:is_valid_aboveground_surface(bp_surface) then
+    aboveground_surface = bp_surface
+    editor_surface = self:editor_surface_for_aboveground_surface(bp_surface)
+    aboveground_bp = bp
+    temporary_chest, editor_bp = create_temporary_stack()
+    editor_bp.create_blueprint{
+      surface = editor_surface,
+      area = area,
+      force = player.force,
+    }
   end
-  bp.set_blueprint_entities(bp_entities)
 
+  -- try to find anchors
+  local aboveground_bp_entities = aboveground_bp.get_blueprint_entities() or {}
+  local aboveground_bp_to_world, aboveground_world_to_bp =
+    bp_position_transforms(aboveground_bp_entities, aboveground_surface, area)
+
+  local editor_bp_entities = editor_bp.get_blueprint_entities() or {}
+  local editor_bp_to_world, editor_world_to_bp =
+    bp_position_transforms(editor_bp_entities, editor_surface, area)
+
+  convert_bp_entities_to_bpproxies(self, editor_bp_entities)
+
+  -- merge entities from both blueprints
+  local last_aboveground_bp_entity = #aboveground_bp_entities
+  for i, editor_bp_entity in ipairs(editor_bp_entities) do
+    local world_position = editor_bp_to_world(editor_bp_entity.position)
+    local aboveground_bp_position = aboveground_world_to_bp(world_position)
+    local entity_number = last_aboveground_bp_entity + i
+    editor_bp_entity.entity_number = entity_number
+    editor_bp_entity.position = aboveground_bp_position
+    aboveground_bp_entities[entity_number] = editor_bp_entity
+  end
+
+  bp.set_blueprint_entities(aboveground_bp_entities)
+
+  temporary_chest.destroy()
   return bp
 end
 

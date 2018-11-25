@@ -18,9 +18,23 @@ local function export_mocks(env, args)
   }
   env.defines = defines
 
+  local temporary_stack = {
+    create_blueprint = function() end,
+    set_stack = function() end,
+  }
+  local temporary_inventory = {
+    temporary_stack
+  }
+  local temporary_chest = {
+    destroy = function() end,
+    get_inventory = function() return temporary_inventory end,
+  }
+  mock(temporary_chest)
+
   local nauvis = {
     name = "nauvis",
     spill_item_stack = function() end,
+    create_entity = function() return temporary_chest end,
   }
 
   local editor_surface = {
@@ -159,6 +173,7 @@ local function export_mocks(env, args)
     player = player,
     editor_entity = editor_entity,
     editor_surface = editor_surface,
+    temporary_stack = temporary_stack,
   }
 end
 
@@ -318,27 +333,45 @@ describe("A BaseEditor", function()
   end)
 
   describe("captures underground entities as bpproxies in blueprints", function()
-    local bp = {
-      valid = true,
-      valid_for_read = true,
-      get_blueprint_entities = function()
-        return {
-          {
-            entity_number = 1,
-            name = "validentity",
-            position = {x=0, y=0},
+    local area = { left_top = {x=-10, y=-10}, right_bottom = {x=10, y=10} }
+    local bp, aboveground_bp_entities, editor_bp_entities
+    before_each(function()
+      bp = {
+        valid = true,
+        valid_for_read = true,
+        get_blueprint_entities = function()
+          return {
+            {
+              entity_number = 1,
+              name = "validentity",
+              position = {x=0, y=0},
+            }
           }
+        end,
+        set_blueprint_entities = function() end,
+      }
+      spy.on(bp, "set_blueprint_entities")
+      p.blueprint_to_setup = bp
+
+      aboveground_bp_entities = {
+        {
+          entity_number = 1,
+          name = "validentity",
+          position = {x=0, y=0},
         }
-      end,
-      set_blueprint_entities = function() end,
-    }
-    spy.on(bp, "set_blueprint_entities")
+      }
+      editor_bp_entities = {
+        {
+          entity_number = 1,
+          name = "validentity",
+          position = {x=0, y=0},
+        }
+      }
+    end)
 
     it("translates position correctly", function()
-      p.blueprint_to_setup = bp
-      local area = { left_top = {x=-10, y=-10}, right_bottom = {x=10, y=10} }
+      mocks.temporary_stack.get_blueprint_entities = function() return editor_bp_entities end 
       uut:capture_underground_entities_in_blueprint{ player_index = 1, area = area }
-      assert.spy(editor_surface.find_entities_filtered).was.called_with{ area = area }
       assert.spy(bp.set_blueprint_entities).was.called_with{
         {
           entity_number = 1,
@@ -356,8 +389,7 @@ describe("A BaseEditor", function()
 
     it("handles blueprints with no entities", function()
       bp.get_blueprint_entities = function() return nil end
-      p.blueprint_to_setup = bp
-      local area = { left_top = {x=-10, y=-10}, right_bottom = {x=10, y=10} }
+      mocks.temporary_stack.get_blueprint_entities = function() return nil end
       uut:capture_underground_entities_in_blueprint{ player_index = 1, area = area }
       assert.spy(editor_surface.find_entities_filtered).was_not.called()
     end)
@@ -372,22 +404,46 @@ describe("A BaseEditor", function()
           }
         }
       end
-      p.blueprint_to_setup = bp
       spy.on(bp, "set_blueprint_entities")
-      local area = { left_top = {x=-10, y=-10}, right_bottom = {x=10, y=10} }
-      local bad_editor_entity = {
-        valid = true,
-        name = "badentity",
-        position = {x=2, y=2},
-        surface = editor_surface,
-      }
-      editor_surface.find_entities_filtered = function() return {bad_editor_entity} end
+      mocks.temporary_stack.get_blueprint_entities = function() return {
+          {
+            entity_number = 1,
+            name = "badentity",
+            position = {x=2, y=2},
+          }
+        }
+      end
       uut:capture_underground_entities_in_blueprint{ player_index = 1, area = area }
       assert.spy(bp.set_blueprint_entities).was.called_with{
         {
           entity_number = 1,
           name = "badentity",
           position = {x=0, y=0},
+        },
+      }
+    end)
+
+    it("and surface entities when taking a blueprint from an editor", function()
+      p.surface = editor_surface
+      mocks.temporary_stack.get_blueprint_entities = function() return {
+          {
+            entity_number = 1,
+            name = "validentity",
+            position = {x=0, y=0},
+          }
+        }
+      end
+      uut:capture_underground_entities_in_blueprint{ player_index = 1, area = area }
+      assert.spy(bp.set_blueprint_entities).was.called_with{
+        {
+          entity_number = 1,
+          name = "validentity",
+          position = {x=0, y=0},
+        },
+        {
+          entity_number = 2,
+          name = "testeditor-bpproxy-validentity",
+          position = {x=-2, y=-2},
         },
       }
     end)
