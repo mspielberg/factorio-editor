@@ -178,6 +178,9 @@ local function export_mocks(env, args)
 end
 
 _G.global = {}
+_G.remote = {
+  interfaces = {}
+}
 
 describe("A BaseEditor", function()
   local BaseEditor

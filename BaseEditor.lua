@@ -62,6 +62,10 @@ local function create_editor_surface(self, name)
   )
   surface.daytime = 0.35
   surface.freeze_daytime = true
+
+  if remote.interfaces["RSO"] and remote.interfaces["RSO"]["ignoreSurface"] then
+    remote.call("RSO", "ignoreSurface", name)
+  end
 end
 
 local _editor_surface_cache = {}
@@ -820,6 +824,16 @@ function BaseEditor:on_put_item(event)
   player_placing_blueprint_with_bpproxy = false
   if stack.valid_for_read and stack.is_blueprint and stack.is_blueprint_setup() then
     on_player_placing_blueprint(self, event.player_index, stack)
+  end
+end
+
+function BaseEditor:on_configuration_changed(data)
+  if remote.interfaces["RSO"] and remote.interfaces["RSO"]["ignoreSurface"] then
+    for name, surface in pairs(game.surfaces) do
+      if self:is_editor_surface(surface) then
+        remote.call("RSO", "ignoreSurface", name)
+      end
+    end
   end
 end
 
