@@ -362,39 +362,6 @@ end
 
 local player_placing_blueprint_with_bpproxy
 
--- converts overworld bpproxy ghost to regular ghost underground
-local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
-  local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
-  if editor_surface.find_entity("entity-ghost", ghost.position) then
-    ghost.destroy()
-    return
-  end
-
-  local position = ghost.position
-  local create_entity_args = {
-    name = name,
-    position = position,
-    force = ghost.force,
-    direction = ghost.direction,
-    build_check_type = defines.build_check_type.ghost_place,
-  }
-  if ghost.ghost_type == "underground-belt" then
-    create_entity_args.type = ghost.belt_to_ground_type
-  elseif ghost.ghost_type == "loader" then
-    create_entity_args.type = ghost.loader_type
-  end
-
-  if editor_surface.can_place_entity(create_entity_args) then
-    create_entity_args.name = "entity-ghost"
-    create_entity_args.inner_name = name
-    create_entity_args.build_check_type = nil
-    local editor_ghost = editor_surface.create_entity(create_entity_args)
-    editor_ghost.last_user = ghost.last_user
-  else
-    ghost.destroy()
-  end
-end
-
 local function create_entity_args_for_ghost(ghost)
   local create_entity_args = {
     name = "entity-ghost",
@@ -411,26 +378,48 @@ local function create_entity_args_for_ghost(ghost)
   return create_entity_args
 end
 
+-- converts overworld bpproxy ghost to regular ghost underground
+local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
+  local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
+  if editor_surface.find_entity("entity-ghost", ghost.position) then
+    ghost.destroy()
+    return
+  end
+
+  local create_entity_args = create_entity_args_for_ghost(ghost)
+  create_entity_args.name = name
+  create_entity_args.inner_name = nil
+  create_entity_args.build_check_type = defines.build_check_type.ghost_place
+
+  if editor_surface.can_place_entity(create_entity_args) then
+    create_entity_args.name = "entity-ghost"
+    create_entity_args.inner_name = name
+    create_entity_args.build_check_type = nil
+    local editor_ghost = editor_surface.create_entity(create_entity_args)
+    editor_ghost.last_user = ghost.last_user
+  else
+    ghost.destroy()
+  end
+end
+
 local function on_player_built_underground_ghost(self, ghost)
   local aboveground_surface = self:aboveground_surface_for_editor_surface(ghost.surface)
   local create_entity_args = create_entity_args_for_ghost(ghost)
-  local proxy = proxy_name(self, ghost.ghost_name)
   local nonproxy = nonproxy_name(self, ghost.ghost_name)
   if nonproxy then
-    -- this is a bpproxy ghost, move it aboveground
+    -- this is a bpproxy ghost, move it above ground
     aboveground_surface.create_entity(create_entity_args)
     -- replace bpproxy ghost with regular ghost
     create_entity_args.inner_name = nonproxy
     ghost.surface.create_entity(create_entity_args)
     ghost.destroy()
   elseif player_placing_blueprint_with_bpproxy then
-    -- regular ghost in editor, force to be regular ghost on surface
+    -- regular ghost in editor, force to be regular ghost above ground
     aboveground_surface.create_entity(create_entity_args)
     ghost.destroy()
   elseif has_proxy(self, ghost.ghost_name) then
     -- regular ghost in editor, create surface bpproxy ghost
     create_entity_args.inner_name = proxy_name(self, ghost.ghost_name)
-    print(serpent.block(create_entity_args))
     aboveground_surface.create_entity(create_entity_args)
   else
     -- regular ghost in editor without a proxy, just clear it away
