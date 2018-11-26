@@ -658,22 +658,209 @@ describe("A BaseEditor", function()
         }
         assert.stub(editor_ghost_invalid_access).was_not.called()
       end)
+    end)
 
-
-      it("prevents bpproxy ghosts from being placed underground", function()
-        local underground_bpproxy_ghost = {
+    describe("handles placing a blueprint", function()
+      local bp, nonproxy_ghost, proxy_ghost, editor_ghost
+      before_each(function()
+        bp = {
+          valid = true,
+          valid_for_read = true,
+          is_blueprint = true,
+          is_blueprint_setup = function() return true end,
+          get_blueprint_entities = function()
+            return {
+              {
+                entity_number = 1,
+                name = "validentity",
+                position = {x=0, y=0},
+              },
+              {
+                entity_number = 2,
+                name = "testeditor-bpproxy-validentity",
+                position = {x=1, y=1},
+              },
+            }
+          end,
+        }
+        p.cursor_stack = bp
+        nonproxy_ghost = {
+          valid = true,
+          name = "entity-ghost",
+          ghost_name = "validentity",
+          force = "player",
+          position = {x=10, y=10},
+          direction = 4,
+          destroy = stub(),
+        }
+        proxy_ghost = {
           valid = true,
           name = "entity-ghost",
           ghost_name = "testeditor-bpproxy-validentity",
-          position = {x=0,y=0},
-          direction = 0,
           force = "player",
-          surface = editor_surface,
+          position = {x=12, y=12},
+          direction = 4,
           destroy = stub(),
         }
+        editor_ghost = {
+          valid = true,
+          name = "entity-ghost",
+          ghost_name = "validentity",
+          force = "player",
+          position = {x=12, y=12},
+          direction = 4,
+          destroy = stub(),
+        }
+      end)
 
-        uut:on_built_entity{ player_index = 1, created_entity = underground_bpproxy_ghost }
-        assert.stub(underground_bpproxy_ghost.destroy).was.called()
+      describe("with bpproxies", function()
+        it("above ground", function()
+          nonproxy_ghost.surface = nauvis
+          proxy_ghost.surface = nauvis
+          editor_surface.find_entity = function() return nil end
+          editor_surface.can_place_entity = function() return true end
+          editor_surface.create_entity = spy.new(function() return editor_ghost end)
+          uut:on_put_item{ player_index = 1 }
+          uut:on_built_entity{ created_entity = nonproxy_ghost }
+          uut:on_built_entity{ created_entity = proxy_ghost }
+          assert.spy(editor_surface.create_entity).was_called_with{
+            name = "entity-ghost",
+            inner_name = "validentity",
+            position = {x=12, y=12},
+            force = "player",
+            direction = 4,
+          }
+        end)
+
+        it("in an editor", function()
+          nonproxy_ghost.surface = editor_surface
+          proxy_ghost.surface = editor_surface
+          nauvis.find_entity = function() return nil end
+          nauvis.can_place_entity = function() return true end
+          nauvis.create_entity = spy.new(function() return nonproxy_ghost end)
+          editor_surface.create_entity = spy.new(function() return editor_ghost end)
+          uut:on_put_item{ player_index = 1 }
+          uut:on_built_entity{ created_entity = nonproxy_ghost }
+          uut:on_built_entity{ created_entity = proxy_ghost }
+          assert.spy(nauvis.create_entity).was.called_with{
+            name = "entity-ghost",
+            inner_name = "validentity",
+            position = {x=10, y=10},
+            force = "player",
+            direction = 4,
+          }
+          assert.stub(nonproxy_ghost.destroy).was.called()
+          assert.spy(editor_surface.create_entity).was.called_with{
+            name = "entity-ghost",
+            inner_name = "validentity",
+            position = {x=12, y=12},
+            force = "player",
+            direction = 4,
+          }
+          assert.stub(proxy_ghost.destroy).was.called()
+        end)
+      end)
+
+      describe("without bpproxies", function()
+        before_each(function()
+          bp.get_blueprint_entities = function()
+            return {
+              {
+                entity_number = 1,
+                name = "validentity",
+                position = {x=0, y=0},
+              },
+            }
+          end
+        end)
+
+        it("in an editor should leave regular ghost in editor and create bpproxy for it", function()
+          nonproxy_ghost.surface = editor_surface
+          proxy_ghost.surface = nauvis
+          nauvis.find_entity = function() return nil end
+          nauvis.can_place_entity = function() return true end
+          nauvis.create_entity = spy.new(function() return proxy_ghost end)
+          editor_surface.create_entity = spy.new(function() return editor_ghost end)
+          uut:on_put_item{ player_index = 1 }
+          uut:on_built_entity{ created_entity = nonproxy_ghost }
+          assert.spy(nauvis.create_entity).was.called_with{
+            name = "entity-ghost",
+            inner_name = "testeditor-bpproxy-validentity",
+            position = {x=10, y=10},
+            force = "player",
+            direction = 4,
+          }
+          assert.stub(nonproxy_ghost.destroy).was_not.called()
+        end)
+      end)
+
+      describe("with entities that are not valid for the editor", function()
+        local bp, ghost
+        before_each(function()
+          bp = {
+            valid_for_read = true,
+            is_blueprint = true,
+            is_blueprint_setup = function() return true end,
+            get_blueprint_entities = function()
+              return {
+                {
+                  entity_number = 1,
+                  name = "badentity",
+                  position = {x=0, y=0},
+                },
+                {
+                  entity_number = 2,
+                  name = "testeditor-bpproxy-validentity",
+                  position = {x=1, y=1},
+                },
+              }
+            end,
+          }
+          p.cursor_stack = bp
+          ghost = {
+            valid = true,
+            name = "entity-ghost",
+            ghost_name = "badentity",
+            surface = editor_surface,
+            position = {x=5, y=5},
+            force = "player",
+            direction = 2,
+            destroy = stub(),
+          }
+        end)
+
+        describe("with bpproxies", function()
+          it("creates ghosts above ground and removes editor ghosts", function()
+            uut:on_put_item{ player_index = 1 }
+            uut:on_built_entity{ created_entity = ghost }
+            assert.spy(nauvis.create_entity).was.called_with{
+              name = "entity-ghost",
+              inner_name = "badentity",
+              position = {x=5, y=5},
+              force = "player",
+              direction = 2,
+            }
+            assert.stub(ghost.destroy).was.called()
+          end)
+        end)
+
+        describe("without bpproxies", function()
+          it("destroys the editor ghosts", function()
+            bp.get_blueprint_entities = function()
+              return {
+                {
+                  entity_number = 1,
+                  name = "badentity",
+                  position = {x=0, y=0},
+                },
+              }
+            end
+            uut:on_put_item{ player_index = 1 }
+            uut:on_built_entity{ created_entity = ghost }
+            assert.spy(nauvis.create_entity).was_not.called()
+            assert.stub(ghost.destroy).was.called()
+          end)
+        end)
       end)
     end)
 
