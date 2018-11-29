@@ -39,6 +39,9 @@ local function export_mocks(env, args)
 
   local editor_surface = {
     name = "testeditor",
+    is_chunk_generated = function() return true end,
+    request_to_generate_chunks = stub(),
+    force_generate_chunk_requests = stub(),
   }
 
   local character = {
@@ -209,6 +212,7 @@ describe("A BaseEditor", function()
     before_each(function()
       -- override with mocks that don't have the editor surface created
       mocks = export_mocks(_G, {create_editor_surface = false})
+      editor_surface = mocks.editor_surface
       g, p = mocks.game, mocks.player
       uut = BaseEditor.new("testeditor")
     end)
@@ -216,6 +220,13 @@ describe("A BaseEditor", function()
     it("creates a surface on first toggle", function()
       uut:toggle_editor_status_for_player(1)
       assert.spy(g.create_surface).was.called_with("testeditor", match._)
+    end)
+
+    it("requests and waits for chunk to be generated", function()
+      editor_surface.is_chunk_generated = function() return false end
+      uut:toggle_editor_status_for_player(1)
+      assert.stub(editor_surface.request_to_generate_chunks).was.called_with(p.position, 1)
+      assert.stub(editor_surface.force_generate_chunk_requests).was.called()
     end)
 
     it("moves player to newly created surface", function()

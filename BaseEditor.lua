@@ -120,14 +120,21 @@ local function move_player_to_editor(self, player)
   local success = player.clean_cursor()
   if not success then return end
   local player_index = player.index
-  local underground_surface = self:editor_surface_for_aboveground_surface(player.surface)
+  local position = player.position
+
+  local editor_surface = self:editor_surface_for_aboveground_surface(player.surface)
+  if not editor_surface.is_chunk_generated(position) then
+    editor_surface.request_to_generate_chunks(position, 1)
+    editor_surface.force_generate_chunk_requests()
+  end
+
   self.player_state[player_index] = {
-    position = player.position,
+    position = position,
     surface = player.surface,
     character = player.character,
   }
   player.character = nil
-  player.teleport(player.position, underground_surface)
+  player.teleport(player.position, editor_surface)
 end
 
 local function return_player_from_editor(self, player)
