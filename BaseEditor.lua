@@ -27,7 +27,7 @@ local function editor_surface_name(self, aboveground_surface_name)
   return self.name.."-"..aboveground_surface_name
 end
 
-local function create_editor_surface(self, name)
+local function create_editor_surface(name)
   local autoplace_control = editor_autoplace_control()
   local autoplace_controls, tile_settings
   if autoplace_control then
@@ -75,7 +75,7 @@ function BaseEditor:editor_surface_for_aboveground_surface(aboveground_surface)
     if not self:is_valid_aboveground_surface(aboveground_surface) then return nil end
     local underground_surface_name = editor_surface_name(self, aboveground_surface.name)
     if not game.surfaces[underground_surface_name] then
-      create_editor_surface(self, underground_surface_name)
+      create_editor_surface(underground_surface_name)
     end
     underground_surface = game.surfaces[underground_surface_name]
     _editor_surface_cache[aboveground_surface] = underground_surface
@@ -92,17 +92,35 @@ end
 
 local _aboveground_surface_cache = {}
 function BaseEditor:aboveground_surface_for_editor_surface(editor_surface)
-  local surface = _aboveground_surface_cache[editor_surface]
-  if not surface then
+  local aboveground_surface = _aboveground_surface_cache[editor_surface]
+  if not aboveground_surface then
     local surface_name = aboveground_surface_name(self, editor_surface.name)
-    surface = game.surfaces[surface_name]
-    _aboveground_surface_cache[editor_surface] = surface
+    aboveground_surface = game.surfaces[surface_name]
+    _aboveground_surface_cache[editor_surface] = aboveground_surface
   end
-  return surface
+  return aboveground_surface
 end
 
 function BaseEditor:is_editor_surface(surface)
   return surface.name:find("^"..self.name) ~= nil
+end
+
+function BaseEditor:get_aboveground_surface(surface)
+  if self:is_valid_aboveground_surface(surface) then
+    return surface
+  elseif self:is_editor_surface(surface) then
+    return self:aboveground_surface_for_editor_surface(surface)
+  end
+  return nil
+end
+
+function BaseEditor:get_editor_surface(surface)
+  if self:is_editor_surface(surface) then
+    return surface
+  elseif self:is_valid_aboveground_surface(surface) then
+    return self:editor_surface_for_aboveground_surface(surface)
+  end
+  return nil
 end
 
 local function counterpart_surface(self, surface)
@@ -595,10 +613,12 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
     aboveground_bp_entities[entity_number] = editor_bp_entity
   end
 
-  bp.set_blueprint_entities(aboveground_bp_entities)
+  if next(aboveground_bp_entities) then
+    bp.set_blueprint_entities(aboveground_bp_entities)
+  end
 
   temporary_chest.destroy()
-  return bp
+  return bp, aboveground_bp_to_world
 end
 
 ---------------------------------------------------------------------------------------------------
