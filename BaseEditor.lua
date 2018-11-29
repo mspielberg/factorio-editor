@@ -126,9 +126,10 @@ end
 local function counterpart_surface(self, surface)
   if self:is_editor_surface(surface) then
     return self:aboveground_surface_for_editor_surface(surface)
-  else
+  elseif self:is_valid_aboveground_surface(surface) then
     return self:editor_surface_for_aboveground_surface(surface)
   end
+  return nil
 end
 
 ---------------------------------------------------------------------------------------------------
