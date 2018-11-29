@@ -123,7 +123,7 @@ function BaseEditor:get_editor_surface(surface)
   return nil
 end
 
-local function counterpart_surface(self, surface)
+function BaseEditor:counterpart_surface(surface)
   if self:is_editor_surface(surface) then
     return self:aboveground_surface_for_editor_surface(surface)
   elseif self:is_valid_aboveground_surface(surface) then
@@ -469,7 +469,7 @@ local function on_player_built_ghost(self, ghost)
 end
 
 local function counterpart_ghosts(self, ghost)
-  local surface = counterpart_surface(self, ghost.surface)
+  local surface = self:counterpart_surface(ghost.surface)
   if not surface then return {} end
   local ghosts = surface.find_entities_filtered{
     name = "entity-ghost",
