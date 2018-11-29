@@ -340,29 +340,31 @@ local function on_player_built_underground_entity(self, player_index, entity, st
   end
 end
 
-local function create_underground_entity(self, entity)
-  local underground_surface = self:editor_surface_for_aboveground_surface(entity.surface)
-  if not underground_surface then return end
+local function create_editor_entity(self, bpproxy)
+  local editor_surface = self:editor_surface_for_aboveground_surface(bpproxy.surface)
+  if not editor_surface then return end
+  local position = bpproxy.position
+  local type = bpproxy.type
   local create_args = {
-    name = nonproxy_name(self, entity.name),
-    position = entity.position,
-    force = entity.force,
-    direction = entity.direction,
+    name = nonproxy_name(self, bpproxy.name),
+    position = position,
+    force = bpproxy.force,
+    direction = bpproxy.direction,
   }
-  if entity.type == "underground-belt" then
-    create_args.type = entity.belt_to_ground_type
-  elseif entity.type == "loader" then
-    create_args.type = entity.loader_type
+  if type == "underground-belt" then
+    create_args.type = bpproxy.belt_to_ground_type
+  elseif type == "loader" then
+    create_args.type = bpproxy.loader_type
   end
 
-  local underground_entity = underground_surface.create_entity(create_args)
-  entity.surface.create_entity{
+  local editor_entity = editor_surface.create_entity(create_args)
+  bpproxy.surface.create_entity{
     name = "flying-text",
-    position = entity.position,
-    text = {self.name.."-message.created-underground", underground_entity.localised_name},
+    position = position,
+    text = {self.name.."-message.created-underground", editor_entity.localised_name},
   }
 
-  return underground_entity
+  return editor_entity
 end
 
 function BaseEditor.abort_build(creator, entity, stack, message)
@@ -378,8 +380,8 @@ function BaseEditor.abort_build(creator, entity, stack, message)
 end
 
 local function on_built_bpproxy(self, creator, bpproxy, stack)
-  local underground_entity = create_underground_entity(self, bpproxy)
-  if underground_entity then
+  local editor_entity = create_editor_entity(self, bpproxy)
+  if editor_entity then
     bpproxy.destroy()
   else
     self.abort_build(
