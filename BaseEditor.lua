@@ -1,5 +1,5 @@
 local BaseEditor = {}
-local serpent = require "serpent"
+local inspect = require "inspect"
 
 ---------------------------------------------------------------------------------------------------
 -- Abstract methods to be overridden by subclasses
@@ -396,11 +396,11 @@ local player_placing_blueprint_with_bpproxy
 
 local function create_entity_args_for_ghost(ghost)
   local create_entity_args = {
-    name = "entity-ghost",
-    inner_name = ghost.ghost_name,
+    name = ghost.ghost_name,
     position = ghost.position,
     force = ghost.force,
-    direction = ghost.direction
+    direction = ghost.direction,
+    last_user = ghost.last_user,
   }
   if ghost.ghost_type == "underground-belt" then
     create_entity_args.type = ghost.belt_to_ground_type
@@ -408,6 +408,22 @@ local function create_entity_args_for_ghost(ghost)
     create_entity_args.type = ghost.loader_type
   end
   return create_entity_args
+end
+
+local function try_to_create_ghost(surface, create_entity_args)
+  local last_user = create_entity_args.last_user
+  create_entity_args.last_user = nil
+  create_entity_args.build_check_type = defines.build_check_type.ghost_place
+
+  if surface.can_place_entity(create_entity_args) then
+    create_entity_args.inner_name = create_entity_args.name
+    create_entity_args.name = "entity-ghost"
+    create_entity_args.build_check_type = nil
+    local ghost = surface.create_entity(create_entity_args)
+    ghost.last_user = last_user
+    return ghost
+  end
+  return nil
 end
 
 -- converts overworld bpproxy ghost to regular ghost underground
@@ -420,39 +436,34 @@ local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
 
   local create_entity_args = create_entity_args_for_ghost(ghost)
   create_entity_args.name = name
-  create_entity_args.inner_name = nil
-  create_entity_args.build_check_type = defines.build_check_type.ghost_place
-
-  if editor_surface.can_place_entity(create_entity_args) then
-    create_entity_args.name = "entity-ghost"
-    create_entity_args.inner_name = name
-    create_entity_args.build_check_type = nil
-    local editor_ghost = editor_surface.create_entity(create_entity_args)
-    editor_ghost.last_user = ghost.last_user
-  else
+  local editor_ghost = try_to_create_ghost(editor_surface, create_entity_args)
+  if not editor_ghost then
+    -- position was blocked in editor
     ghost.destroy()
   end
 end
 
 local function on_player_built_underground_ghost(self, ghost)
-  local aboveground_surface = self:aboveground_surface_for_editor_surface(ghost.surface)
+  local editor_surface = ghost.surface
+  local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_surface)
   local create_entity_args = create_entity_args_for_ghost(ghost)
   local nonproxy = nonproxy_name(self, ghost.ghost_name)
   if nonproxy then
-    -- this is a bpproxy ghost, move it above ground
-    aboveground_surface.create_entity(create_entity_args)
-    -- replace bpproxy ghost with regular ghost
-    create_entity_args.inner_name = nonproxy
-    ghost.surface.create_entity(create_entity_args)
+    -- this is a bpproxy ghost, move it above ground and create regular ghost in editor
+    local aboveground_ghost = try_to_create_ghost(aboveground_surface, create_entity_args)
+    if aboveground_ghost then
+      create_entity_args.name = nonproxy
+      try_to_create_ghost(editor_surface, create_entity_args)
+    end
     ghost.destroy()
   elseif player_placing_blueprint_with_bpproxy then
     -- regular ghost in editor, force to be regular ghost above ground
-    aboveground_surface.create_entity(create_entity_args)
+    try_to_create_ghost(aboveground_surface, create_entity_args)
     ghost.destroy()
   elseif has_proxy(self, ghost.ghost_name) then
     -- regular ghost in editor, create surface bpproxy ghost
-    create_entity_args.inner_name = proxy_name(self, ghost.ghost_name)
-    aboveground_surface.create_entity(create_entity_args)
+    create_entity_args.name = proxy_name(self, ghost.ghost_name)
+    try_to_create_ghost(aboveground_surface, create_entity_args)
   else
     -- regular ghost in editor without a proxy, just clear it away
     ghost.destroy()

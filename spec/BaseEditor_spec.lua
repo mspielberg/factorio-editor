@@ -498,6 +498,7 @@ describe("A BaseEditor", function()
         position = {x=0, y=0},
         force = "player",
         direction = 0,
+        last_user = p,
         destroy = stub(),
       }
       editor_ghost_invalid_access = spy.new(function(t, k) print("invalid key "..k.." accessed") end)
@@ -620,10 +621,18 @@ describe("A BaseEditor", function()
       end)
 
       it("places aboveground bpproxy ghosts when underground ghosts are placed", function()
+        nauvis.can_place_entity = spy.new(function() return true end)
         nauvis.create_entity = spy.new(function() return surface_ghost end)
         uut:on_built_entity{
           player_index = 1,
           created_entity = editor_ghost,
+        }
+        assert.spy(nauvis.can_place_entity).was.called_with{
+          name = "testeditor-bpproxy-validentity",
+          position = {x=0, y=0},
+          direction = 0,
+          force = "player",
+          build_check_type = _G.defines.build_check_type.ghost_place,
         }
         assert.spy(nauvis.create_entity).was.called_with{
           name = "entity-ghost",
@@ -638,10 +647,19 @@ describe("A BaseEditor", function()
       it("copies belt_to_ground_type for underground underground-belt ghosts", function()
         editor_ghost.ghost_type = "underground-belt"
         editor_ghost.belt_to_ground_type = "output"
+        nauvis.can_place_entity = spy.new(function() return true end)
         nauvis.create_entity = spy.new(function() return surface_ghost end)
         uut:on_built_entity{
           player_index = 1,
           created_entity = editor_ghost,
+        }
+        assert.spy(nauvis.can_place_entity).was.called_with{
+          name = "testeditor-bpproxy-validentity",
+          position = {x=0, y=0},
+          direction = 0,
+          force = "player",
+          type = "output",
+          build_check_type = _G.defines.build_check_type.ghost_place,
         }
         assert.spy(nauvis.create_entity).was.called_with{
           name = "entity-ghost",
@@ -657,10 +675,19 @@ describe("A BaseEditor", function()
       it("copies loader_type for underground loader ghosts", function()
         editor_ghost.ghost_type = "loader"
         editor_ghost.loader_type = "output"
+        nauvis.can_place_entity = spy.new(function() return true end)
         nauvis.create_entity = spy.new(function() return surface_ghost end)
         uut:on_built_entity{
           player_index = 1,
           created_entity = editor_ghost,
+        }
+        assert.spy(nauvis.can_place_entity).was.called_with{
+          name = "testeditor-bpproxy-validentity",
+          position = {x=0, y=0},
+          direction = 0,
+          force = "player",
+          type = "output",
+          build_check_type = _G.defines.build_check_type.ghost_place,
         }
         assert.spy(nauvis.create_entity).was.called_with{
           name = "entity-ghost",
@@ -728,50 +755,85 @@ describe("A BaseEditor", function()
       end)
 
       describe("with bpproxies", function()
-        it("above ground", function()
-          nonproxy_ghost.surface = nauvis
-          proxy_ghost.surface = nauvis
-          editor_surface.find_entity = function() return nil end
-          editor_surface.can_place_entity = function() return true end
-          editor_surface.create_entity = spy.new(function() return editor_ghost end)
-          uut:on_put_item{ player_index = 1 }
-          uut:on_built_entity{ created_entity = nonproxy_ghost }
-          uut:on_built_entity{ created_entity = proxy_ghost }
-          assert.spy(editor_surface.create_entity).was_called_with{
-            name = "entity-ghost",
-            inner_name = "validentity",
-            position = {x=12, y=12},
-            force = "player",
-            direction = 4,
-          }
+        describe("above ground", function()
+          it("when there is room in the editor", function()
+            nonproxy_ghost.surface = nauvis
+            proxy_ghost.surface = nauvis
+            editor_surface.find_entity = function() return nil end
+            editor_surface.can_place_entity = function() return true end
+            editor_surface.create_entity = spy.new(function() return editor_ghost end)
+            uut:on_put_item{ player_index = 1 }
+            uut:on_built_entity{ created_entity = nonproxy_ghost }
+            uut:on_built_entity{ created_entity = proxy_ghost }
+            assert.spy(editor_surface.create_entity).was.called_with{
+              name = "entity-ghost",
+              inner_name = "validentity",
+              position = {x=12, y=12},
+              force = "player",
+              direction = 4,
+            }
+          end)
+
+          it("when there is no room in the editor", function()
+            nonproxy_ghost.surface = nauvis
+            proxy_ghost.surface = nauvis
+            editor_surface.find_entity = function() return nil end
+            editor_surface.can_place_entity = function() return false end
+            editor_surface.create_entity = spy.new(function() return editor_ghost end)
+            uut:on_put_item{ player_index = 1 }
+            uut:on_built_entity{ created_entity = nonproxy_ghost }
+            uut:on_built_entity{ created_entity = proxy_ghost }
+            assert.spy(editor_surface.create_entity).was_not.called()
+            assert.stub(proxy_ghost.destroy).was.called()
+          end)
         end)
 
-        it("in an editor", function()
-          nonproxy_ghost.surface = editor_surface
-          proxy_ghost.surface = editor_surface
-          nauvis.find_entity = function() return nil end
-          nauvis.can_place_entity = function() return true end
-          nauvis.create_entity = spy.new(function() return nonproxy_ghost end)
-          editor_surface.create_entity = spy.new(function() return editor_ghost end)
-          uut:on_put_item{ player_index = 1 }
-          uut:on_built_entity{ created_entity = nonproxy_ghost }
-          uut:on_built_entity{ created_entity = proxy_ghost }
-          assert.spy(nauvis.create_entity).was.called_with{
-            name = "entity-ghost",
-            inner_name = "validentity",
-            position = {x=10, y=10},
-            force = "player",
-            direction = 4,
-          }
-          assert.stub(nonproxy_ghost.destroy).was.called()
-          assert.spy(editor_surface.create_entity).was.called_with{
-            name = "entity-ghost",
-            inner_name = "validentity",
-            position = {x=12, y=12},
-            force = "player",
-            direction = 4,
-          }
-          assert.stub(proxy_ghost.destroy).was.called()
+        describe("in an editor", function()
+          it("when there is room in the editor", function()
+            nonproxy_ghost.surface = editor_surface
+            proxy_ghost.surface = editor_surface
+            nauvis.find_entity = function() return nil end
+            nauvis.can_place_entity = function() return true end
+            nauvis.create_entity = spy.new(function() return nonproxy_ghost end)
+            editor_surface.can_place_entity = spy.new(function() return true end)
+            editor_surface.create_entity = spy.new(function() return editor_ghost end)
+            uut:on_put_item{ player_index = 1 }
+            uut:on_built_entity{ created_entity = nonproxy_ghost }
+            uut:on_built_entity{ created_entity = proxy_ghost }
+            assert.spy(nauvis.create_entity).was.called_with{
+              name = "entity-ghost",
+              inner_name = "validentity",
+              position = {x=10, y=10},
+              force = "player",
+              direction = 4,
+            }
+            assert.stub(nonproxy_ghost.destroy).was.called()
+            assert.spy(editor_surface.create_entity).was.called_with{
+              name = "entity-ghost",
+              inner_name = "validentity",
+              position = {x=12, y=12},
+              force = "player",
+              direction = 4,
+            }
+            assert.stub(proxy_ghost.destroy).was.called()
+          end)
+
+          it("when there is no room in the editor", function()
+            nonproxy_ghost.surface = editor_surface
+            proxy_ghost.surface = editor_surface
+            nauvis.find_entity = function() return nil end
+            nauvis.can_place_entity = function() return false end
+            nauvis.create_entity = spy.new(function() return nonproxy_ghost end)
+            editor_surface.can_place_entity = spy.new(function() return false end)
+            editor_surface.create_entity = spy.new(function() return editor_ghost end)
+            uut:on_put_item{ player_index = 1 }
+            uut:on_built_entity{ created_entity = nonproxy_ghost }
+            uut:on_built_entity{ created_entity = proxy_ghost }
+            assert.spy(nauvis.create_entity).was_not.called()
+            assert.stub(nonproxy_ghost.destroy).was.called()
+            assert.spy(editor_surface.create_entity).was_not.called()
+            assert.stub(proxy_ghost.destroy).was.called()
+          end)
         end)
       end)
 
@@ -845,6 +907,7 @@ describe("A BaseEditor", function()
 
         describe("with bpproxies", function()
           it("creates ghosts above ground and removes editor ghosts", function()
+            nauvis.can_place_entity = function() return true end
             uut:on_put_item{ player_index = 1 }
             uut:on_built_entity{ created_entity = ghost }
             assert.spy(nauvis.create_entity).was.called_with{
