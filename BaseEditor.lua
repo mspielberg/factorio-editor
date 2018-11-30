@@ -415,25 +415,22 @@ local function try_to_create_ghost(surface, create_entity_args)
   create_entity_args.last_user = nil
   create_entity_args.build_check_type = defines.build_check_type.ghost_place
 
-  if surface.can_place_entity(create_entity_args) then
-    create_entity_args.inner_name = create_entity_args.name
-    create_entity_args.name = "entity-ghost"
-    create_entity_args.build_check_type = nil
-    local ghost = surface.create_entity(create_entity_args)
-    ghost.last_user = last_user
-    return ghost
+  if not surface.can_place_entity(create_entity_args) then
+    return nil
   end
-  return nil
+
+  create_entity_args.inner_name = create_entity_args.name
+  create_entity_args.name = "entity-ghost"
+  create_entity_args.build_check_type = nil
+  local ghost = surface.create_entity(create_entity_args)
+  ghost.last_user = last_user
+
+  return ghost
 end
 
 -- converts overworld bpproxy ghost to regular ghost underground
 local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
   local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
-  if editor_surface.find_entity("entity-ghost", ghost.position) then
-    ghost.destroy()
-    return
-  end
-
   local create_entity_args = create_entity_args_for_ghost(ghost)
   create_entity_args.name = name
   local editor_ghost = try_to_create_ghost(editor_surface, create_entity_args)

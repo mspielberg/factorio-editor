@@ -509,7 +509,6 @@ describe("A BaseEditor", function()
 
     describe("new ghost creation", function()
       it("places underground ghosts when aboveground bpproxy ghosts are placed", function()
-        editor_surface.find_entity = spy.new(function() return nil end)
         editor_surface.can_place_entity = spy.new(function() return true end)
         editor_surface.create_entity = spy.new(function() return editor_ghost end)
 
@@ -537,7 +536,6 @@ describe("A BaseEditor", function()
       end)
 
       it("copies belt_to_ground_type from underground-belt bpproxies", function()
-        editor_surface.find_entity = spy.new(function() return nil end)
         editor_surface.can_place_entity = spy.new(function() return true end)
         editor_surface.create_entity = spy.new(function() return editor_ghost end)
 
@@ -569,7 +567,6 @@ describe("A BaseEditor", function()
       end)
 
       it("copies loader_type from loader bpproxies", function()
-        editor_surface.find_entity = spy.new(function() return nil end)
         editor_surface.can_place_entity = spy.new(function() return true end)
         editor_surface.create_entity = spy.new(function() return editor_ghost end)
 
@@ -601,7 +598,6 @@ describe("A BaseEditor", function()
       end)
 
       it("destroys newly placed aboveground bpproxy ghosts if underground is blocked", function()
-        editor_surface.find_entity = spy.new(function() return nil end)
         editor_surface.can_place_entity = spy.new(function() return false end)
 
         uut:on_built_entity{
@@ -759,7 +755,6 @@ describe("A BaseEditor", function()
           it("when there is room in the editor", function()
             nonproxy_ghost.surface = nauvis
             proxy_ghost.surface = nauvis
-            editor_surface.find_entity = function() return nil end
             editor_surface.can_place_entity = function() return true end
             editor_surface.create_entity = spy.new(function() return editor_ghost end)
             uut:on_put_item{ player_index = 1 }
@@ -777,7 +772,6 @@ describe("A BaseEditor", function()
           it("when there is no room in the editor", function()
             nonproxy_ghost.surface = nauvis
             proxy_ghost.surface = nauvis
-            editor_surface.find_entity = function() return nil end
             editor_surface.can_place_entity = function() return false end
             editor_surface.create_entity = spy.new(function() return editor_ghost end)
             uut:on_put_item{ player_index = 1 }
@@ -792,7 +786,6 @@ describe("A BaseEditor", function()
           it("when there is room in the editor", function()
             nonproxy_ghost.surface = editor_surface
             proxy_ghost.surface = editor_surface
-            nauvis.find_entity = function() return nil end
             nauvis.can_place_entity = function() return true end
             nauvis.create_entity = spy.new(function() return nonproxy_ghost end)
             editor_surface.can_place_entity = spy.new(function() return true end)
@@ -828,7 +821,6 @@ describe("A BaseEditor", function()
           it("when there is no room in the editor", function()
             nonproxy_ghost.surface = editor_surface
             proxy_ghost.surface = editor_surface
-            nauvis.find_entity = function() return nil end
             nauvis.can_place_entity = function() return true end
             nauvis.create_entity = spy.new(function() return nonproxy_ghost end)
             editor_surface.can_place_entity = spy.new(function() return false end)
@@ -868,7 +860,6 @@ describe("A BaseEditor", function()
         it("in an editor should leave regular ghost in editor and create bpproxy for it", function()
           nonproxy_ghost.surface = editor_surface
           proxy_ghost.surface = nauvis
-          nauvis.find_entity = function() return nil end
           nauvis.can_place_entity = function() return true end
           nauvis.create_entity = spy.new(function() return proxy_ghost end)
           editor_surface.create_entity = spy.new(function() return editor_ghost end)
@@ -1375,7 +1366,7 @@ describe("A BaseEditor", function()
         assert.spy(editor_surface.find_entity).was_not.called()
       end)
 
-      it("by hand", function()
+      it("by robot", function()
         uut:on_robot_mined_entity{entity = badentity}
         assert.spy(editor_surface.find_entity).was_not.called()
       end)
