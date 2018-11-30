@@ -574,6 +574,18 @@ local function create_temporary_stack()
   return chest, stack
 end
 
+local function merge_bp_entities(bp1_entities, bp2_entities, bp2_to_world, world_to_bp1)
+  local last_bp1_entity_number = #bp1_entities
+  for i, bp2_entity in ipairs(bp2_entities) do
+    local world_position = bp2_to_world(bp2_entity.position)
+    local bp1_position = world_to_bp1(world_position)
+    local entity_number = last_bp1_entity_number + i
+    bp2_entity.entity_number = entity_number
+    bp2_entity.position = bp1_position
+    bp1_entities[entity_number] = bp2_entity
+  end
+end
+
 --- Captures all entities both above ground and in the editor in a single blueprint.
 function BaseEditor:capture_underground_entities_in_blueprint(event)
   local player = game.players[event.player_index]
@@ -617,14 +629,14 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
   convert_bp_entities_to_bpproxies(self, editor_bp_entities)
 
   -- merge entities from both blueprints
-  local last_aboveground_bp_entity = #aboveground_bp_entities
-  for i, editor_bp_entity in ipairs(editor_bp_entities) do
-    local world_position = editor_bp_to_world(editor_bp_entity.position)
-    local aboveground_bp_position = aboveground_world_to_bp(world_position)
-    local entity_number = last_aboveground_bp_entity + i
-    editor_bp_entity.entity_number = entity_number
-    editor_bp_entity.position = aboveground_bp_position
-    aboveground_bp_entities[entity_number] = editor_bp_entity
+  if next(aboveground_bp_entities) and next(editor_bp_entities) then
+    merge_bp_entities(
+      aboveground_bp_entities,
+      editor_bp_entities,
+      editor_bp_to_world,
+      aboveground_world_to_bp)
+  elseif next(editor_bp_entities) then
+    aboveground_bp_entities = editor_bp_entities
   end
 
   if next(aboveground_bp_entities) then
