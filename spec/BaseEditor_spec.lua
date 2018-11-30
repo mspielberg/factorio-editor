@@ -80,6 +80,7 @@ local function export_mocks(env, args)
       if stack.name == "fits" then return stack.count
       else return stack.count / 2 end
     end,
+    name = "testplayer",
     position = {x=1, y=1},
     print = function() end,
     remove_item = function() end,
@@ -728,6 +729,7 @@ describe("A BaseEditor", function()
           force = "player",
           position = {x=10, y=10},
           direction = 4,
+          last_user = p,
           destroy = stub(),
         }
         proxy_ghost = {
@@ -737,6 +739,7 @@ describe("A BaseEditor", function()
           force = "player",
           position = {x=12, y=12},
           direction = 4,
+          last_user = p,
           destroy = stub(),
         }
         editor_ghost = {
@@ -746,6 +749,7 @@ describe("A BaseEditor", function()
           force = "player",
           position = {x=12, y=12},
           direction = 4,
+          last_user = p,
           destroy = stub(),
         }
       end)
@@ -767,6 +771,7 @@ describe("A BaseEditor", function()
               force = "player",
               direction = 4,
             }
+            assert.is_same(p, editor_ghost.last_user)
           end)
 
           it("when there is no room in the editor", function()
@@ -815,6 +820,7 @@ describe("A BaseEditor", function()
               force = "player",
               direction = 4,
             }
+            assert.is_equal(p, editor_ghost.last_user)
             assert.stub(proxy_ghost.destroy).was.called()
           end)
 

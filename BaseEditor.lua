@@ -1,5 +1,6 @@
-local BaseEditor = {}
 local inspect = require "inspect"
+
+local BaseEditor = {}
 
 ---------------------------------------------------------------------------------------------------
 -- Abstract methods to be overridden by subclasses
@@ -411,18 +412,26 @@ local function create_entity_args_for_ghost(ghost)
 end
 
 local function try_to_create_ghost(surface, create_entity_args)
+  local entity_name = create_entity_args.name
   local last_user = create_entity_args.last_user
-  create_entity_args.last_user = nil
-  create_entity_args.build_check_type = defines.build_check_type.ghost_place
+  local args = {
+    name = entity_name,
+    position = create_entity_args.position,
+    direction = create_entity_args.direction,
+    force = create_entity_args.force,
+    type = create_entity_args.type,
+    build_check_type = defines.build_check_type.ghost_place,
+  }
 
-  if not surface.can_place_entity(create_entity_args) then
+  if not surface.can_place_entity(args) then
     return nil
   end
 
-  create_entity_args.inner_name = create_entity_args.name
-  create_entity_args.name = "entity-ghost"
-  create_entity_args.build_check_type = nil
-  local ghost = surface.create_entity(create_entity_args)
+  args.name = "entity-ghost"
+  args.inner_name = entity_name
+  args.build_check_type = nil
+
+  local ghost = surface.create_entity(args)
   ghost.last_user = last_user
 
   return ghost
