@@ -447,13 +447,19 @@ local function on_player_built_underground_ghost(self, ghost)
   local editor_surface = ghost.surface
   local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_surface)
   local create_entity_args = create_entity_args_for_ghost(ghost)
-  local nonproxy = nonproxy_name(self, ghost.ghost_name)
+  local proxy = ghost.ghost_name
+  local nonproxy = nonproxy_name(self, proxy)
+
   if nonproxy then
     -- this is a bpproxy ghost, move it above ground and create regular ghost in editor
-    local aboveground_ghost = try_to_create_ghost(aboveground_surface, create_entity_args)
-    if aboveground_ghost then
-      create_entity_args.name = nonproxy
-      try_to_create_ghost(editor_surface, create_entity_args)
+    ghost.destroy()
+    -- try to create editor ghost first, since it has a collision_mask
+    create_entity_args.name = nonproxy
+    local editor_ghost = try_to_create_ghost(editor_surface, create_entity_args)
+    if editor_ghost then
+      -- succeeded creating editor ghost, so create matching bpproxy ghost above ground
+      create_entity_args.name = proxy
+      try_to_create_ghost(aboveground_surface, create_entity_args)
     end
     ghost.destroy()
   elseif player_placing_blueprint_with_bpproxy then

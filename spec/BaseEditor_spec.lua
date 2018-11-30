@@ -808,6 +808,13 @@ describe("A BaseEditor", function()
               direction = 4,
             }
             assert.stub(nonproxy_ghost.destroy).was.called()
+            assert.spy(nauvis.create_entity).was.called_with{
+              name = "entity-ghost",
+              inner_name = "testeditor-bpproxy-validentity",
+              position = {x=12, y=12},
+              force = "player",
+              direction = 4,
+            }
             assert.spy(editor_surface.create_entity).was.called_with{
               name = "entity-ghost",
               inner_name = "validentity",
@@ -822,16 +829,24 @@ describe("A BaseEditor", function()
             nonproxy_ghost.surface = editor_surface
             proxy_ghost.surface = editor_surface
             nauvis.find_entity = function() return nil end
-            nauvis.can_place_entity = function() return false end
+            nauvis.can_place_entity = function() return true end
             nauvis.create_entity = spy.new(function() return nonproxy_ghost end)
             editor_surface.can_place_entity = spy.new(function() return false end)
-            editor_surface.create_entity = spy.new(function() return editor_ghost end)
+            editor_surface.create_entity = stub()
             uut:on_put_item{ player_index = 1 }
             uut:on_built_entity{ created_entity = nonproxy_ghost }
             uut:on_built_entity{ created_entity = proxy_ghost }
-            assert.spy(nauvis.create_entity).was_not.called()
+            assert.spy(nauvis.create_entity).was.called_with{
+              name = "entity-ghost",
+              inner_name = "validentity",
+              position = {x=10, y=10},
+              force = "player",
+              direction = 4,
+            }
             assert.stub(nonproxy_ghost.destroy).was.called()
-            assert.spy(editor_surface.create_entity).was_not.called()
+            -- make sure only called once, as above, and not called to create bpproxy ghost
+            assert.spy(nauvis.create_entity).was.called(1)
+            assert.stub(editor_surface.create_entity).was_not.called()
             assert.stub(proxy_ghost.destroy).was.called()
           end)
         end)
