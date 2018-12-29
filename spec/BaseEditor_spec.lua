@@ -275,7 +275,7 @@ describe("A BaseEditor", function()
   describe("manages player inventory", function()
     it("adds and removes items to the editor inventory", function()
       uut:toggle_editor_status_for_player(1)
-      BaseEditor.on_tick(1)
+      uut:on_tick{tick = 1}
       assert.spy(p.insert).was.called_with({name="validitem", count=10})
       assert.spy(p.remove_item).was.called_with({name="excessitem", count=10})
     end)
@@ -283,7 +283,7 @@ describe("A BaseEditor", function()
     it("ignores disconnected players", function()
       uut:toggle_editor_status_for_player(1)
       p.connected = false
-      BaseEditor.on_tick(1)
+      uut:on_tick{tick = 1}
       assert.spy(p.insert).was_not.called_with({name="validitem", count=10})
       assert.spy(p.remove_item).was_not.called_with({name="excessitem", count=10})
     end)

@@ -907,6 +907,10 @@ function BaseEditor:on_configuration_changed(data)
   end
 end
 
+function BaseEditor:on_tick(event)
+  sync_player_inventories(self)
+end
+
 ---------------------------------------------------------------------------------------------------
 -- Exports
 
@@ -950,9 +954,4 @@ function M.on_load()
     M.restore(global.editor)
   end
 end
-
-function M.on_tick(_)
-  sync_player_inventories(global.editor)
-end
-
 return M
