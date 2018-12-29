@@ -133,6 +133,14 @@ function BaseEditor:counterpart_surface(surface)
   return nil
 end
 
+local function delete_existing_surfaces(self)
+  for _, surface in pairs(game.surfaces) do
+    if self:is_editor_surface(surface) then
+      game.delete_surface(surface)
+    end
+  end
+end
+
 ---------------------------------------------------------------------------------------------------
 -- player/character handling
 
@@ -930,6 +938,7 @@ function M.new(name)
     valid_editor_types = {},
   }
   M.restore(self)
+  delete_existing_surfaces(self)
   return self
 end
 

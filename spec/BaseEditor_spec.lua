@@ -156,6 +156,7 @@ local function export_mocks(env, args)
       game.surfaces[editor_surface.name] = editor_surface
       return editor_surface
     end,
+    delete_surface = stub(),
     entity_prototypes = entity_prototypes,
     item_prototypes = item_prototypes,
     surfaces = { nauvis = nauvis },
@@ -205,6 +206,10 @@ describe("A BaseEditor", function()
     nauvis = mocks.nauvis
     uut = BaseEditor.new("testeditor")
     uut.valid_editor_types = {"validtype"}
+  end)
+
+  it("deletes existing surfaces from a previous installation", function()
+    assert.stub(g.delete_surface).was.called_with(editor_surface)
   end)
 
   describe("creates editor surfaces", function()
