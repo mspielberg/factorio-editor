@@ -805,16 +805,18 @@ function BaseEditor:on_player_mined_item(event)
   if event.mod_name == "upgrade-planner" then
     -- upgrade-planner won't insert to character inventory
     local player = game.players[event.player_index]
-    local character = self.player_state[event.player_index].character
-    if character then
-      local stack = event.item_stack
-      local count = stack.count
-      local inserted = self.return_to_character_or_spill(player, character, stack)
-      local excess = count - inserted
-      if excess > 0 then
-        -- try to match editor inventory to character inventory
-        player.remove_item{name = stack.name, count = excess}
-      end
+    local state = self.player_state[event.player_index]
+    if not state then return end
+    local character = state.character
+    if not character then return end
+
+    local stack = event.item_stack
+    local count = stack.count
+    local inserted = self.return_to_character_or_spill(player, character, stack)
+    local excess = count - inserted
+    if excess > 0 then
+      -- try to match editor inventory to character inventory
+      player.remove_item{name = stack.name, count = excess}
     end
   end
 end

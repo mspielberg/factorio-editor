@@ -345,6 +345,15 @@ describe("A BaseEditor", function()
       }
       assert.spy(c.remove_item).was.called_with{ name = "validitem", count = 1 }
     end)
+
+    it("ignores upgrade planner actions not on an editor surface", function()
+      uut:on_player_mined_item{
+        mod_name = "upgrade-planner",
+        player_index = 1,
+        item_stack = { name = "validitem", count = 1 },
+      }
+      assert.spy(c.insert).was_not.called()
+    end)
   end)
 
   describe("captures underground entities as bpproxies in blueprints", function()
