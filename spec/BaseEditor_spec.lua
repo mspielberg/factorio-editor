@@ -199,8 +199,6 @@ describe("A BaseEditor", function()
     -- force reload to clear caches between test cases
     package.loaded["BaseEditor"] = nil
     BaseEditor = require "BaseEditor"
-    BaseEditor.on_init()
-
     mocks = export_mocks(_G, {create_editor_surface = true})
     g, p, c = mocks.game, mocks.player, mocks.player.character
     editor_surface = mocks.editor_surface

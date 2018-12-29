@@ -929,29 +929,12 @@ function M.new(name)
     player_state = {},
     valid_editor_types = {},
   }
-  global.editor = self
-  return M.restore(self)
-end
-
-function M.instance(name)
-  if global.editor then
-    return global.editor
-  else
-    return M.new(name)
-  end
+  M.restore(self)
+  return self
 end
 
 function M.restore(self)
   return setmetatable(self, meta)
 end
 
-function M.on_init()
-  M.on_load()
-end
-
-function M.on_load()
-  if global.editor then
-    M.restore(global.editor)
-  end
-end
 return M
