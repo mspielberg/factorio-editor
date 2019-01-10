@@ -6,8 +6,9 @@ local BaseEditor = {}
 -- Abstract methods to be overridden by subclasses
 
 function BaseEditor:is_valid_aboveground_surface(surface)
-  return surface.name == "nauvis"
-    or surface.name:match("^Nauvis plus ")
+  return surface.name == "nauvis"          -- base
+    or surface.name == "Game"              -- TeamCoop
+    or surface.name:match("^Nauvis plus ") -- NewGamePlus
 end
 
 ---------------------------------------------------------------------------------------------------
