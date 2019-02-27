@@ -1,5 +1,3 @@
-local inspect = require "inspect"
-
 local BaseEditor = {}
 
 ---------------------------------------------------------------------------------------------------
@@ -702,7 +700,7 @@ local function create_deconstruction_proxy(self, entity, player)
   bpproxy_entity.order_deconstruction(player.force, player)
 end
 
-local function on_canceled_bpproxy_deconstruction(self, entity, player)
+local function on_cancelled_bpproxy_deconstruction(self, entity, player)
   local counterpart = underground_counterpart_entity(self, entity)
   if counterpart and counterpart.to_be_deconstructed(counterpart.force) then
     local force = player and player.force or counterpart.force
@@ -711,7 +709,7 @@ local function on_canceled_bpproxy_deconstruction(self, entity, player)
   entity.destroy()
 end
 
-local function on_canceled_underground_deconstruction(self, entity)
+local function on_cancelled_underground_deconstruction(self, entity)
   local counterpart = self:surface_counterpart_bpproxy(entity)
   if counterpart then
     counterpart.destroy()
@@ -839,7 +837,7 @@ function BaseEditor:on_player_mined_entity(event)
       self:return_buffer_to_character(event.player_index, character, event.buffer)
     end
     if entity.to_be_deconstructed(entity.force) then
-      on_canceled_underground_deconstruction(self, entity)
+      on_cancelled_underground_deconstruction(self, entity)
     end
   elseif self:is_valid_aboveground_surface(surface) then
     local editor_entity = underground_counterpart_entity(self, entity)
@@ -888,12 +886,12 @@ function BaseEditor:on_marked_for_deconstruction(event)
   end
 end
 
-function BaseEditor:on_canceled_deconstruction(event)
+function BaseEditor:on_cancelled_deconstruction(event)
   local entity = event.entity
   if nonproxy_name(self, entity.name) then
-    on_canceled_bpproxy_deconstruction(self, entity, game.players[event.player_index])
+    on_cancelled_bpproxy_deconstruction(self, entity, game.players[event.player_index])
   elseif self:is_editor_surface(entity.surface) then
-    on_canceled_underground_deconstruction(self, entity)
+    on_cancelled_underground_deconstruction(self, entity)
   end
 end
 

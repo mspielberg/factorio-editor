@@ -1312,7 +1312,7 @@ describe("A BaseEditor", function()
     describe("destroys bpproxy entities when", function()
       it("unmarking underground entities", function()
         nauvis.find_entity = spy.new(function() return bpproxy_entity end)
-        uut:on_canceled_deconstruction{
+        uut:on_cancelled_deconstruction{
           player_index = 1,
           entity = editor_entity,
         }
@@ -1334,7 +1334,7 @@ describe("A BaseEditor", function()
 
       it("unmarking bpproxy entities", function()
         editor_surface.find_entity = spy.new(function() return editor_entity end)
-        uut:on_canceled_deconstruction{
+        uut:on_cancelled_deconstruction{
           player_index = 1,
           entity = bpproxy_entity,
         }
