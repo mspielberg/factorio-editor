@@ -670,9 +670,10 @@ end
 -- deconstruction
 
 function BaseEditor:surface_counterpart_bpproxy(entity)
-  local name = proxy_name(self, entity.name)
+  local name = entity.name
+  if not has_proxy(self, name) then return nil end
   local aboveground_surface = self:aboveground_surface_for_editor_surface(entity.surface)
-  return aboveground_surface.find_entity(name, entity.position)
+  return aboveground_surface.find_entity(proxy_name(self, name), entity.position)
 end
 
 local function underground_counterpart_entity(self, entity)

@@ -1411,6 +1411,26 @@ describe("A BaseEditor", function()
     end)
   end)
 
+  describe("handles dropped items in editor", function()
+    local item_on_ground = {
+      name = "item-on-ground",
+      surface = editor_surface,
+    }
+    before_each(function()
+      uut:toggle_editor_status_for_player(1)
+    end)
+    describe("when mined", function()
+      it("that are marked for deconstruction", function()
+        item_on_ground.to_be_deconstructed = function() return true end
+        uut:on_player_mined_entity{
+          player_index = 1,
+          entity = item_on_ground,
+          buffer = mocks.buffer,
+        }
+      end)
+    end)
+  end)
+
   describe("returns contents of mined", function()
     local buffer
     local position = {}
