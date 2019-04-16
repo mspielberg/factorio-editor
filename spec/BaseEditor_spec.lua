@@ -1,6 +1,16 @@
 require "busted"
 local serpent = require "serpent"
 
+local function trap_nil_index(t)
+  local getter = function(_, k)
+    if k == nil then
+      error("nil index in table dereference")
+    end
+    return rawget(t, k)
+  end
+  return setmetatable({}, { __index = getter})
+end
+
 local function export_mocks(env, args)
   local defines = {
     build_check_type = {
@@ -160,7 +170,7 @@ local function export_mocks(env, args)
     entity_prototypes = entity_prototypes,
     item_prototypes = item_prototypes,
     surfaces = { nauvis = nauvis },
-    players = { mock(player) },
+    players = trap_nil_index{ mock(player) },
   }
   env.game = game
 
@@ -1341,6 +1351,16 @@ describe("A BaseEditor", function()
         assert.spy(editor_surface.find_entity).was.called_with("validentity", position)
         assert.stub(bpproxy_entity.destroy).was.called()
         assert.spy(editor_entity.cancel_deconstruction).was.called_with(p.force, p)
+      end)
+
+      it("unmarking bpproxy entities with no player", function()
+        editor_surface.find_entity = spy.new(function() return editor_entity end)
+        uut:on_cancelled_deconstruction{
+          entity = bpproxy_entity,
+        }
+        assert.spy(editor_surface.find_entity).was.called_with("validentity", position)
+        assert.stub(bpproxy_entity.destroy).was.called()
+        assert.spy(editor_entity.cancel_deconstruction).was.called_with(p.force, nil)
       end)
     end)
 

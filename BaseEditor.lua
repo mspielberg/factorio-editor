@@ -889,7 +889,8 @@ end
 function BaseEditor:on_cancelled_deconstruction(event)
   local entity = event.entity
   if nonproxy_name(self, entity.name) then
-    on_cancelled_bpproxy_deconstruction(self, entity, game.players[event.player_index])
+    local player = event.player_index and game.players[event.player_index]
+    on_cancelled_bpproxy_deconstruction(self, entity, player)
   elseif self:is_editor_surface(entity.surface) then
     on_cancelled_underground_deconstruction(self, entity)
   end
