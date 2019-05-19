@@ -913,6 +913,57 @@ function BaseEditor:order_underground_deconstruction(player, editor_surface, are
 end
 
 ---------------------------------------------------------------------------------------------------
+-- upgrade
+
+local function create_upgrade_proxy(self, entity, target, force)
+  local surface = self:aboveground_surface_for_editor_surface(entity.surface)
+  local args = {
+    name = proxy_name(self, entity.name),
+    position = entity.position,
+    direction = entity.direction,
+    force = entity.force,
+  }
+  if entity.type == "underground-belt" then
+    args.type = entity.belt_to_ground_type
+  elseif entity.type == "loader" then
+    args.type = entity.loader_type
+  end
+  local bpproxy_entity = surface.create_entity(args)
+  bpproxy_entity.destructible = false
+  bpproxy_entity.order_upgrade{
+    force = player and player.force or entity.force,
+    target = proxy_name(self, target.name),
+    player = player,
+  }
+end
+
+local function on_cancelled_aboveground_upgrade(self, event)
+  local player = event.player_index and game.players[event.player_index]
+  local bpproxy = event.entity
+  local name = nonproxy_name(self, bpproxy.name)
+  if not name then return end
+
+  local editor_surface = self:editor_surface_for_aboveground_surface(bpproxy.surface)
+  local editor_entity = editor_surface.find_entity(name, bpproxy.position)
+  if editor_entity and editor_entity.to_be_upgraded() then
+    editor_entity.cancel_upgrade(editor_entity.force, player)
+    bpproxy.destroy()
+  end
+end
+
+local function on_cancelled_editor_upgrade(self, event)
+  local player = event.player_index and game.players[event.player_index]
+  local editor_entity = event.entity
+  local name = proxy_name(self, editor_entity.name)
+
+  local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_entity.surface)
+  local bpproxy = aboveground_surface.find_entity(name, editor_entity.position)
+  if bpproxy and bpproxy.to_be_upgraded() then
+    bpproxy.destroy()
+  end
+end
+
+---------------------------------------------------------------------------------------------------
 -- event handlers
 
 function BaseEditor:on_built_entity(event)
@@ -932,6 +983,42 @@ function BaseEditor:on_built_entity(event)
     on_player_built_underground_entity(self, player_index, entity, stack)
   elseif nonproxy_name(self, entity.name) then
     on_built_bpproxy(self, game.players[player_index], entity, stack)
+  end
+end
+
+function BaseEditor:on_cancelled_upgrade(event)
+  local surface = event.entity.surface
+  if self:is_editor_surface(surface) then
+    return on_cancelled_editor_upgrade(self, event)
+  elseif self:is_valid_aboveground_surface(surface) then
+    return on_cancelled_aboveground_upgrade(self, event)
+  end
+end
+
+function BaseEditor:on_marked_for_upgrade(event)
+  local entity = event.entity
+  local target_proto = event.target
+  local player = event.player_index and game.players[event.player_index]
+  if self:is_editor_surface(entity.surface)
+  and has_proxy(self, entity.name)
+  and has_proxy(self, target_proto.name) then
+    create_upgrade_proxy(self, entity, event.target, player)
+  end
+end
+
+function BaseEditor:on_picked_up_item(event)
+  local player = game.players[event.player_index]
+  if not self:is_editor_surface(player.surface) then return end
+  local character = self.player_state[event.player_index].character
+  if character then
+    local stack = event.item_stack
+    local inserted = self.return_to_character_or_spill(player, character, stack)
+    local excess = stack.count - inserted
+    if not is_stack_valid_for_editor(self, stack) then
+      player.remove_item(stack)
+    elseif excess > 0 then
+      player.remove_item{name = stack.name, count = excess}
+    end
   end
 end
 
