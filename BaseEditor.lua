@@ -758,9 +758,10 @@ function BaseEditor:order_underground_deconstruction(player, editor_surface, are
         if ghosts[1] then ghosts[1].destroy() end
         entity.destroy()
       elseif has_proxy(self, entity.name) then
-        create_deconstruction_proxy(self, entity, player)
         local was_minable = entity.minable
         entity.minable = true
+        -- This will fire an on_marked_for_deconstruction event, and that handler
+        -- will create the aboveground bpproxy.
         entity.order_deconstruction(player.force, player)
         entity.minable = was_minable
         to_deconstruct[#to_deconstruct+1] = entity

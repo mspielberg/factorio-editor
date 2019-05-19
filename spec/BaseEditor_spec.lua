@@ -1201,17 +1201,8 @@ describe("A BaseEditor", function()
           }
 
           if should_deconstruct then
-            assert.spy(nauvis.create_entity).was.called_with{
-              name = "testeditor-bpproxy-validentity",
-              position = position,
-              force = "player",
-              direction = 0,
-            }
-            assert.spy(bpproxy_entity.order_deconstruction).was.called_with(p.force, p)
             assert.spy(editor_entity.order_deconstruction).was.called_with(p.force, p)
           else
-            assert.spy(nauvis.create_entity).was_not.called()
-            assert.spy(bpproxy_entity.order_deconstruction).was_not.called()
             assert.spy(editor_entity.order_deconstruction).was_not.called()
           end
         end
