@@ -365,14 +365,7 @@ local function create_editor_entity(self, bpproxy)
     create_args.type = bpproxy.loader_type
   end
 
-  local editor_entity = editor_surface.create_entity(create_args)
-  bpproxy.surface.create_entity{
-    name = "flying-text",
-    position = position,
-    text = {self.name.."-message.created-underground", editor_entity.localised_name},
-  }
-
-  return editor_entity
+  return editor_surface.create_entity(create_args)
 end
 
 function BaseEditor.abort_build(creator, entity, stack, message)
@@ -390,6 +383,11 @@ end
 local function on_built_bpproxy(self, creator, bpproxy, stack)
   local editor_entity = create_editor_entity(self, bpproxy)
   if editor_entity then
+    bpproxy.surface.create_entity{
+      name = "flying-text",
+      position = bpproxy.position,
+      text = {self.name.."-message.created-underground", editor_entity.localised_name},
+    }
     bpproxy.destroy()
   else
     self.abort_build(
