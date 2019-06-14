@@ -718,6 +718,9 @@ local function on_cancelled_underground_deconstruction(self, entity)
 end
 
 local function create_entity_filter(tool)
+  if not (tool and tool.valid_for_read and tool.is_deconstruction_item) then
+    return function(entity) return true end
+  end
   local set = {}
   for _, item in pairs(tool.entity_filters) do
     set[item] = true
