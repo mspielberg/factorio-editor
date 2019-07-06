@@ -209,8 +209,14 @@ local function is_item_prototype_valid_for_editor(self, item_prototype)
   return is_valid
 end
 
+local _is_item_valid_for_editor_cache = {}
 local function is_item_valid_for_editor(self, name)
-  return is_item_prototype_valid_for_editor(self, game.item_prototypes[name])
+  local is_valid = _is_item_valid_for_editor_cache[name]
+  if is_valid == nil then
+    is_valid = is_item_prototype_valid_for_editor(self, game.item_prototypes[name])
+    _is_item_valid_for_editor_cache[name] = is_valid
+  end
+  return is_valid
 end
 
 local function is_stack_valid_for_editor(self, stack)
