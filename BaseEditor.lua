@@ -141,52 +141,6 @@ local function delete_existing_surfaces(self)
 end
 
 ---------------------------------------------------------------------------------------------------
--- player/character handling
-
-local function move_player_to_editor(self, player)
-  local success = player.clean_cursor()
-  if not success then return end
-  local player_index = player.index
-  local position = player.position
-
-  local editor_surface = self:editor_surface_for_aboveground_surface(player.surface)
-  if not editor_surface.is_chunk_generated(position) then
-    editor_surface.request_to_generate_chunks(position, 1)
-    editor_surface.force_generate_chunk_requests()
-  end
-
-  self.player_state[player_index] = {
-    position = position,
-    surface = player.surface,
-    character = player.character,
-  }
-  player.character = nil
-  player.teleport(player.position, editor_surface)
-end
-
-local function return_player_from_editor(self, player)
-  local player_index = player.index
-  local state = self.player_state[player_index]
-  player.teleport(state.position, state.surface)
-  if state.character then
-    player.character = state.character
-  end
-  self.player_state[player_index] = nil
-end
-
-function BaseEditor:toggle_editor_status_for_player(player_index)
-  local player = game.players[player_index]
-  local surface = player.surface
-  if self:is_editor_surface(surface) then
-    return_player_from_editor(self, player)
-  elseif self:is_valid_aboveground_surface(surface) then
-    move_player_to_editor(self, player)
-  else
-    player.print({self.name.."-error.bad-surface-for-editor"})
-  end
-end
-
----------------------------------------------------------------------------------------------------
 -- inventory handling
 
 local _is_item_prototype_valid_for_editor_cache = {}
@@ -236,27 +190,113 @@ local function valid_editor_items(self)
   return _valid_editor_items_cache
 end
 
-local function sync_player_inventory(self, character, player)
+local function item_deltas(before, after)
+  local out = {}
+  for name, count in pairs(before) do
+    out[name] = (after[name] or 0) - count
+  end
+  for name, count in pairs(after) do
+    if not before[name] then
+      out[name] = count
+    end
+  end
+  return out
+end
+
+local function apply_deltas(control, prev_counts, deltas)
+  local new_counts = {}
+  for name, count in pairs(prev_counts) do
+    new_counts[name] = count
+  end
+
+  for name, delta in pairs(deltas) do
+    if delta < 0 then
+      control.remove_item{name = name, count = -delta}
+    end
+  end
+
+  for name, delta in pairs(deltas) do
+    if delta > 0 then
+      local inserted = control.insert{name = name, count = delta}
+      if inserted < delta then
+        if control.is_player() then
+          control.print({"inventory-restriction.player-inventory-full", game.item_prototypes[stack.name].localised_name})
+        end
+        control.surface.spill_item_stack(control.position, {name = name, count = delta - inserted})
+      end
+    end
+    new_counts[name] = (prev_counts[name] or 0) + delta
+  end
+  return new_counts
+end
+
+local max_inventory
+for _, inventory_id in pairs(defines.inventory) do
+  if not max_inventory or inventory_id > max_inventory then
+    max_inventory = inventory_id
+  end
+end
+
+local function get_all_item_counts(control)
+  local out = {}
+  for inventory_id=1,max_inventory do
+    local inventory = control.get_inventory(inventory_id)
+    if inventory then
+      local contents = inventory.get_contents()
+      for name, count in pairs(inventory.get_contents()) do
+        out[name] = (out[name] or 0) + count
+      end
+    end
+  end
+  return out
+end
+
+local function get_valid_item_counts(self, control)
+  local out = {}
   for name in pairs(valid_editor_items(self)) do
-    local character_count = character.get_item_count(name)
-    local player_count = player.get_item_count(name)
-    if character_count > player_count then
-      player.insert{name = name, count = character_count - player_count}
-    elseif character_count < player_count and not player.cheat_mode then
-      player.remove_item{name = name, count = player_count - character_count}
+    out[name] = control.get_item_count(name)
+    if out[name] == 0 then out[name] = nil end
+  end
+  return out
+end
+
+local function sync_inventories(self, player, state)
+  local character = state.character
+  if not character then return end
+
+  local player_counts = get_all_item_counts(player)
+  local prev_player_counts = state.prev_player_counts or player_counts
+  local player_deltas = item_deltas(prev_player_counts, player_counts)
+
+  local character_counts = get_valid_item_counts(self, character)
+  local prev_character_counts = state.prev_character_counts or character_counts
+  local character_deltas = item_deltas(prev_character_counts, character_counts)
+
+  local new_player_counts = apply_deltas(player, player_counts, character_deltas)
+  state.prev_player_counts = new_player_counts
+
+  local new_character_counts = apply_deltas(character, character_counts, player_deltas)
+  state.prev_character_counts = new_character_counts
+
+  for name, count in pairs(new_player_counts) do
+    if count > 0 and not is_item_valid_for_editor(self, name) then
+      player.remove_item{name = name, count = count}
+      -- not interested in tracking changes to this item
+      new_player_counts[name] = nil
+      new_character_counts[name] = nil
     end
   end
 end
 
-local function sync_player_inventories(self)
-  for player_index, state in pairs(self.player_state) do
-    local character = state.character
-    if character then
-      local player = game.players[player_index]
-      if player.connected then
-        sync_player_inventory(self, character, player)
-      end
-    end
+local function sync_player_inventories(self, player_index)
+  local state = self.player_state[player_index]
+  if not state then return end
+  sync_inventories(self, game.players[player_index], state)
+end
+
+local function sync_connected_players_inventories(self)
+  for _, player in pairs(game.connected_players) do
+    sync_player_inventories(self, player.index)
   end
 end
 
@@ -280,6 +320,54 @@ local function return_contents_to_buffer(entity, buffer)
     for i=1,n do
       return_transport_line_to_buffer(entity.get_transport_line(i), buffer)
     end
+  end
+end
+
+---------------------------------------------------------------------------------------------------
+-- player/character handling
+
+local function move_player_to_editor(self, player)
+  local success = player.clean_cursor()
+  if not success then return end
+  local player_index = player.index
+  local position = player.position
+
+  local editor_surface = self:editor_surface_for_aboveground_surface(player.surface)
+  if not editor_surface.is_chunk_generated(position) then
+    editor_surface.request_to_generate_chunks(position, 1)
+    editor_surface.force_generate_chunk_requests()
+  end
+
+  self.player_state[player_index] = {
+    position = position,
+    surface = player.surface,
+    character = player.character,
+    prev_character_counts = {},
+    prev_player_counts = {},
+  }
+  player.character = nil
+  player.teleport(player.position, editor_surface)
+end
+
+local function return_player_from_editor(self, player)
+  local player_index = player.index
+  local state = self.player_state[player_index]
+  player.teleport(state.position, state.surface)
+  if state.character then
+    player.character = state.character
+  end
+  self.player_state[player_index] = nil
+end
+
+function BaseEditor:toggle_editor_status_for_player(player_index)
+  local player = game.players[player_index]
+  local surface = player.surface
+  if self:is_editor_surface(surface) then
+    return_player_from_editor(self, player)
+  elseif self:is_valid_aboveground_surface(surface) then
+    move_player_to_editor(self, player)
+  else
+    player.print({self.name.."-error.bad-surface-for-editor"})
   end
 end
 
@@ -801,22 +889,6 @@ function BaseEditor:on_built_entity(event)
   end
 end
 
-function BaseEditor:on_picked_up_item(event)
-  local player = game.players[event.player_index]
-  if not self:is_editor_surface(player.surface) then return end
-  local character = self.player_state[event.player_index].character
-  if character then
-    local stack = event.item_stack
-    local inserted = self.return_to_character_or_spill(player, character, stack)
-    local excess = stack.count - inserted
-    if not is_stack_valid_for_editor(self, stack) then
-      player.remove_item(stack)
-    elseif excess > 0 then
-      player.remove_item{name = stack.name, count = excess}
-    end
-  end
-end
-
 function BaseEditor:on_player_mined_item(event)
   if event.mod_name == "upgrade-planner" then
     -- upgrade-planner won't insert to character inventory
@@ -841,10 +913,6 @@ function BaseEditor:on_player_mined_entity(event)
   local entity = event.entity
   local surface = entity.surface
   if self:is_editor_surface(surface) then
-    local character = self.player_state[event.player_index].character
-    if character then
-      self:return_buffer_to_character(event.player_index, character, event.buffer)
-    end
     if entity.to_be_deconstructed(entity.force) then
       on_cancelled_underground_deconstruction(self, entity)
     end
@@ -879,6 +947,10 @@ function BaseEditor:on_pre_player_mined_item(event)
   if entity.name == "entity-ghost" then
     return on_player_mined_ghost(self, entity)
   end
+end
+
+function BaseEditor:on_player_main_inventory_changed(event)
+  sync_player_inventories(self, event.player_index)
 end
 
 function BaseEditor:on_robot_built_entity(event)
@@ -925,7 +997,7 @@ function BaseEditor:on_configuration_changed(data)
 end
 
 function BaseEditor:on_tick(event)
-  sync_player_inventories(self)
+  sync_connected_players_inventories(self)
 end
 
 ---------------------------------------------------------------------------------------------------
