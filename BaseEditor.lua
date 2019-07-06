@@ -776,10 +776,15 @@ local function underground_counterpart_entity(self, entity)
 end
 
 local function create_deconstruction_proxy(self, entity, player)
+  if not has_proxy(self, entity.name) then return end
+  local name = proxy_name(self, entity.name)
+  local position = entity.position
   local surface = self:aboveground_surface_for_editor_surface(entity.surface)
+  if surface.find_entity(name, position) then return end
+
   local args = {
-    name = proxy_name(self, entity.name),
-    position = entity.position,
+    name = name,
+    position = position,
     direction = entity.direction,
     force = entity.force,
   }
@@ -788,6 +793,7 @@ local function create_deconstruction_proxy(self, entity, player)
   elseif entity.type == "loader" then
     args.type = entity.loader_type
   end
+
   local bpproxy_entity = surface.create_entity(args)
   bpproxy_entity.destructible = false
   bpproxy_entity.order_deconstruction(player.force, player)
@@ -962,7 +968,7 @@ end
 
 function BaseEditor:on_marked_for_deconstruction(event)
   local entity = event.entity
-  if self:is_editor_surface(entity.surface) and has_proxy(self, entity.name) then
+  if self:is_editor_surface(entity.surface) then
     create_deconstruction_proxy(self, entity, game.players[event.player_index])
   end
 end
