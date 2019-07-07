@@ -42,9 +42,10 @@ local function export_mocks(env, args)
   mock(temporary_chest)
 
   local nauvis = {
+    create_entity = function() return temporary_chest end,
+    find_entity = function() return nil end,
     name = "nauvis",
     spill_item_stack = function() end,
-    create_entity = function() return temporary_chest end,
   }
 
   local editor_surface = {
@@ -61,8 +62,7 @@ local function export_mocks(env, args)
       end
     end,
     get_item_count = function(name)
-      if name == "excessitem" then return 10
-      elseif name == "validitem" then return 10
+      if name == "validitem" then return 10
       elseif name == "baditem" then return 10
       end
     end,
@@ -70,24 +70,25 @@ local function export_mocks(env, args)
     surface = nauvis,
   }
 
+  local player_inventory = {
+    get_contents = function()
+      return {}
+    end,
+  }
   local player
   player = {
     clean_cursor = function() return true end,
     character = character,
     connected = true,
     force = "player",
-    get_item_count = function(name)
-      if player.character then return player.character.get_item_count(name)
-      else
-        if name == "excessitem" then return 20
-        elseif name == "validitem" then return 0
-        elseif name == "baditem" then return 0
-        end
-      end
+    is_player = function() return true end,
+    get_inventory = function(id)
+      if id == 1 then return player_inventory end
     end,
+    get_item_count = character.get_item_count,
     index = 1,
     insert = function(stack)
-      if stack.name == "fits" then return stack.count
+      if stack.name == "validitem" then return stack.count
       else return stack.count / 2 end
     end,
     name = "testplayer",
@@ -162,6 +163,7 @@ local function export_mocks(env, args)
     autoplace_control_prototypes = {
       dirt = {},
     },
+    connected_players = { mock(player) },
     create_surface = function()
       game.surfaces[editor_surface.name] = editor_surface
       return editor_surface
@@ -186,6 +188,7 @@ local function export_mocks(env, args)
     game = game,
     nauvis = nauvis,
     player = player,
+    player_inventory = player_inventory,
     editor_entity = editor_entity,
     editor_surface = editor_surface,
     temporary_stack = temporary_stack,
@@ -203,6 +206,7 @@ describe("A BaseEditor", function()
   local c
   local g
   local p
+  local pi
   local uut
   local editor_surface
   local nauvis
@@ -212,6 +216,7 @@ describe("A BaseEditor", function()
     BaseEditor = require "BaseEditor"
     mocks = export_mocks(_G, {create_editor_surface = true})
     g, p, c = mocks.game, mocks.player, mocks.player.character
+    pi = mocks.player_inventory
     editor_surface = mocks.editor_surface
     nauvis = mocks.nauvis
     uut = BaseEditor.new("testeditor")
@@ -286,16 +291,29 @@ describe("A BaseEditor", function()
   end)
 
   describe("manages player inventory", function()
-    it("adds and removes items to the editor inventory", function()
+    it("adds items to the editor inventory", function()
       uut:toggle_editor_status_for_player(1)
       uut:on_tick{tick = 1}
       assert.spy(p.insert).was.called_with({name="validitem", count=10})
-      assert.spy(p.remove_item).was.called_with({name="excessitem", count=10})
+    end)
+
+    it("removes items from the editor inventory", function()
+      uut:toggle_editor_status_for_player(1)
+      uut:on_tick{tick = 1}
+      c.get_item_count = function(name)
+        if name == "validitem" then
+          return 5
+        else
+          return 0
+        end
+      end
+      uut:on_tick{tick = 1}
+      assert.spy(p.remove_item).was.called_with({name="validitem", count=5})
     end)
 
     it("ignores disconnected players", function()
       uut:toggle_editor_status_for_player(1)
-      p.connected = false
+      game.connected_players[1] = nil
       uut:on_tick{tick = 1}
       assert.spy(p.insert).was_not.called_with({name="validitem", count=10})
       assert.spy(p.remove_item).was_not.called_with({name="excessitem", count=10})
@@ -303,36 +321,20 @@ describe("A BaseEditor", function()
 
     it("flushes invalid items picked up in the editor", function()
       uut:toggle_editor_status_for_player(1)
-      uut:on_picked_up_item{
-        player_index = 1,
-        item_stack = {name="baditem", count=1},
-      }
+      pi.get_contents = function() return { baditem = 1 } end
+      uut:on_tick{tick = 1}
       assert.spy(c.insert).was.called_with({name="baditem", count=1})
       assert.spy(p.remove_item).was.called_with({name="baditem", count=1})
     end)
 
     it("doesn't allow more in editor than fit in character", function()
       uut:toggle_editor_status_for_player(1)
-      uut:on_picked_up_item{
-        player_index = 1,
-        item_stack = {name="validitem", count=1},
-      }
+      pi.get_contents = function() return { validitem = 1 } end
+      uut:on_tick{tick = 1}
       assert.spy(c.insert).was.called_with{name="validitem", count=1}
       assert.spy(c.surface.spill_item_stack).was.called_with(c.position, {name="validitem", count=1})
       assert.spy(p.remove_item).was.called_with{name="validitem", count=1}
       assert.spy(p.print).was.called_with{"inventory-restriction.player-inventory-full", {"validitem-localised"}}
-    end)
-
-    it("returns items mined in the editor", function()
-      uut:toggle_editor_status_for_player(1)
-      uut:on_player_mined_entity{
-        player_index = 1,
-        entity = mocks.editor_entity,
-        buffer = mocks.buffer,
-      }
-      assert.are.equal(mocks.buffer[1].count, 0)
-      mocks.buffer[1].count = 1
-      assert.spy(c.insert).was.called_with(mocks.buffer[1])
     end)
   end)
 
@@ -1305,7 +1307,7 @@ describe("A BaseEditor", function()
           surface = editor_surface,
         }
         nauvis.create_entity = stub()
-        uut:on_marked_for_deconstruction{ entity = badentity }
+        uut:on_marked_for_deconstruction{ entity = badentity, player_index = 1, }
         assert.stub(nauvis.create_entity).was_not.called()
       end)
     end)

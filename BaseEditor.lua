@@ -1,3 +1,5 @@
+local serpent = require "serpent"
+
 local BaseEditor = {}
 
 ---------------------------------------------------------------------------------------------------
@@ -203,7 +205,7 @@ local function item_deltas(before, after)
   return out
 end
 
-local function apply_deltas(control, prev_counts, deltas)
+local function apply_deltas_to_character(player, character, prev_counts, deltas)
   local new_counts = {}
   for name, count in pairs(prev_counts) do
     new_counts[name] = count
@@ -211,18 +213,18 @@ local function apply_deltas(control, prev_counts, deltas)
 
   for name, delta in pairs(deltas) do
     if delta < 0 then
-      control.remove_item{name = name, count = -delta}
+      character.remove_item{name = name, count = -delta}
     end
   end
 
   for name, delta in pairs(deltas) do
     if delta > 0 then
-      local inserted = control.insert{name = name, count = delta}
-      if inserted < delta then
-        if control.is_player() then
-          control.print({"inventory-restriction.player-inventory-full", game.item_prototypes[stack.name].localised_name})
-        end
-        control.surface.spill_item_stack(control.position, {name = name, count = delta - inserted})
+      local inserted = character.insert{name = name, count = delta}
+      local excess = delta - inserted
+      if excess > 0 then
+        player.print({"inventory-restriction.player-inventory-full", game.item_prototypes[name].localised_name})
+        player.remove_item{name = name, count = excess}
+        character.surface.spill_item_stack(character.position, {name = name, count = excess})
       end
     end
     new_counts[name] = (prev_counts[name] or 0) + delta
@@ -230,14 +232,37 @@ local function apply_deltas(control, prev_counts, deltas)
   return new_counts
 end
 
-local max_inventory
-for _, inventory_id in pairs(defines.inventory) do
-  if not max_inventory or inventory_id > max_inventory then
-    max_inventory = inventory_id
+local function apply_deltas_to_player(player, prev_counts, deltas)
+  local new_counts = {}
+  for name, count in pairs(prev_counts) do
+    new_counts[name] = count
   end
+
+  for name, delta in pairs(deltas) do
+    if delta < 0 then
+      player.remove_item{name = name, count = -delta}
+    end
+  end
+
+  for name, delta in pairs(deltas) do
+    if delta > 0 then
+      player.insert{name = name, count = delta}
+    end
+    new_counts[name] = (prev_counts[name] or 0) + delta
+  end
+  return new_counts
 end
 
+local max_inventory
 local function get_all_item_counts(control)
+  if not max_inventory then
+    for _, inventory_id in pairs(defines.inventory) do
+      if not max_inventory or inventory_id > max_inventory then
+        max_inventory = inventory_id
+      end
+    end
+  end
+
   local out = {}
   for inventory_id=1,max_inventory do
     local inventory = control.get_inventory(inventory_id)
@@ -264,19 +289,19 @@ local function sync_inventories(self, player, state)
   local character = state.character
   if not character then return end
 
-  local player_counts = get_all_item_counts(player)
-  local prev_player_counts = state.prev_player_counts or player_counts
-  local player_deltas = item_deltas(prev_player_counts, player_counts)
-
   local character_counts = get_valid_item_counts(self, character)
   local prev_character_counts = state.prev_character_counts or character_counts
   local character_deltas = item_deltas(prev_character_counts, character_counts)
 
-  local new_player_counts = apply_deltas(player, player_counts, character_deltas)
-  state.prev_player_counts = new_player_counts
+  local player_counts = get_all_item_counts(player)
+  local prev_player_counts = state.prev_player_counts or player_counts
+  local player_deltas = item_deltas(prev_player_counts, player_counts)
 
-  local new_character_counts = apply_deltas(character, character_counts, player_deltas)
+  local new_character_counts = apply_deltas_to_character(player, character, character_counts, player_deltas)
   state.prev_character_counts = new_character_counts
+
+  local new_player_counts = apply_deltas_to_player(player, player_counts, character_deltas)
+  state.prev_player_counts = new_player_counts
 
   for name, count in pairs(new_player_counts) do
     if count > 0 and not is_item_valid_for_editor(self, name) then
