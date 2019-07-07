@@ -1,4 +1,6 @@
-local serpent = require "serpent"
+if not serpent then
+  serpent = require "serpent"
+end
 
 local BaseEditor = {}
 
