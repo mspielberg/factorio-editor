@@ -214,6 +214,7 @@ local function apply_deltas_to_character(player, character, prev_counts, deltas)
   end
 
   for name, delta in pairs(deltas) do
+    new_counts[name] = (prev_counts[name] or 0) + delta
     if delta < 0 then
       character.remove_item{name = name, count = -delta}
     end
@@ -227,9 +228,9 @@ local function apply_deltas_to_character(player, character, prev_counts, deltas)
         player.print({"inventory-restriction.player-inventory-full", game.item_prototypes[name].localised_name})
         player.remove_item{name = name, count = excess}
         character.surface.spill_item_stack(character.position, {name = name, count = excess})
+        new_counts[name] = (prev_counts[name] or 0) + inserted
       end
     end
-    new_counts[name] = (prev_counts[name] or 0) + delta
   end
   return new_counts
 end
