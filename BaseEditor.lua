@@ -7,10 +7,22 @@ local BaseEditor = {}
 ---------------------------------------------------------------------------------------------------
 -- Abstract methods to be overridden by subclasses
 
+local function is_se_planet_or_moon(surface)
+  local zone = remote.interfaces["space-exploration"]
+    and remote.interfaces["space-exploration"]["get_zone_from_surface_index"]
+    and remote.call(
+      "space-exploration",
+      "get_zone_from_surface_index",
+      {surface_index = surface.index})
+  return zone and (zone.type == "planet" or zone.type == "moon")
+end
+
 function BaseEditor:is_valid_aboveground_surface(surface)
-  return surface.name == "nauvis"          -- base
+  return false
+    or surface.name == "nauvis"            -- base
     or surface.name == "Game"              -- TeamCoop
     or surface.name:match("^Nauvis plus ") -- NewGamePlus
+    or is_se_planet_or_moon(surface)       -- space-exploration
 end
 
 ---------------------------------------------------------------------------------------------------
