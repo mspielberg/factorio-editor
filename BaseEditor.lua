@@ -955,6 +955,7 @@ local function on_cancelled_editor_upgrade(self, event)
   local player = event.player_index and game.players[event.player_index]
   local editor_entity = event.entity
   local name = proxy_name(self, editor_entity.name)
+  if not has_proxy(self, editor_entity.name) then return end
 
   local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_entity.surface)
   local bpproxy = aboveground_surface.find_entity(name, editor_entity.position)
