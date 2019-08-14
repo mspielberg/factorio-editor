@@ -904,8 +904,10 @@ function BaseEditor:order_underground_deconstruction(player, editor_surface, are
         -- This will fire an on_marked_for_deconstruction event, and that handler
         -- will create the aboveground bpproxy.
         entity.order_deconstruction(player.force, player)
-        entity.minable = was_minable
-        to_deconstruct[#to_deconstruct+1] = entity
+        if entity.valid then -- event handler of another mod may have destroyed entity
+          entity.minable = was_minable
+          to_deconstruct[#to_deconstruct+1] = entity
+        end
       end
     end
   end
