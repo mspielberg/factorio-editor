@@ -895,7 +895,7 @@ function BaseEditor:order_underground_deconstruction(player, editor_surface, are
     if filter(entity) then
       if entity.name == "entity-ghost" then
         local ghosts = aboveground_surface.find_entities_filtered{
-          ghost_name = proxy_name(entity.name),
+          ghost_name = proxy_name(self, entity.name),
           position = entity.position,
         }
         if ghosts[1] then ghosts[1].destroy() end
