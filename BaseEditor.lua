@@ -503,9 +503,11 @@ local function create_editor_entity(self, bpproxy)
 end
 
 function BaseEditor.abort_build(creator, entity, stack, message)
-  local inserted = creator.insert(stack)
-  -- cannot insert directly into robots
-  if inserted == 0 then creator.get_inventory(defines.inventory.robot_cargo).insert(stack) end
+  if creator and stack and stack.valid_for_read then
+    local inserted = creator.insert(stack)
+    -- cannot insert directly into robots
+    if inserted == 0 then creator.get_inventory(defines.inventory.robot_cargo).insert(stack) end
+  end
   entity.surface.create_entity{
     name = "flying-text",
     position = entity.position,
@@ -971,6 +973,7 @@ end
 
 function BaseEditor:on_built_entity(event)
   local player_index = event.player_index
+  local player = player_index and game.players[player_index]
   local entity = event.created_entity
   if not entity.valid then return end
   if entity.name == "entity-ghost" then return on_player_built_ghost(self, entity) end
@@ -985,7 +988,7 @@ function BaseEditor:on_built_entity(event)
   if self:is_editor_surface(surface) then
     on_player_built_underground_entity(self, player_index, entity, stack)
   elseif nonproxy_name(self, entity.name) then
-    on_built_bpproxy(self, game.players[player_index], entity, stack)
+    on_built_bpproxy(self, player, entity, stack)
   end
 end
 
