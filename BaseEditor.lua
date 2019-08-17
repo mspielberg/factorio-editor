@@ -969,6 +969,26 @@ local function on_cancelled_editor_upgrade(self, event)
 end
 
 ---------------------------------------------------------------------------------------------------
+-- mining handling
+
+local function on_mined_entity(self, entity, buffer)
+  local surface = entity.surface
+  if self:is_editor_surface(surface) then
+    if entity.to_be_deconstructed(entity.force) then
+      on_cancelled_underground_deconstruction(self, entity)
+    end
+  elseif self:is_valid_aboveground_surface(surface) then
+    local editor_entity = underground_counterpart_entity(self, entity)
+    if editor_entity then
+      if buffer then
+        return_contents_to_buffer(editor_entity, buffer)
+      end
+      editor_entity.destroy()
+    end
+  end
+end
+
+---------------------------------------------------------------------------------------------------
 -- event handlers
 
 function BaseEditor:on_built_entity(event)
@@ -1049,31 +1069,11 @@ function BaseEditor:on_player_mined_item(event)
 end
 
 function BaseEditor:on_player_mined_entity(event)
-  local entity = event.entity
-  local surface = entity.surface
-  if self:is_editor_surface(surface) then
-    if entity.to_be_deconstructed(entity.force) then
-      on_cancelled_underground_deconstruction(self, entity)
-    end
-  elseif self:is_valid_aboveground_surface(surface) then
-    local editor_entity = underground_counterpart_entity(self, entity)
-    if editor_entity then
-      return_contents_to_buffer(editor_entity, event.buffer)
-      editor_entity.destroy()
-    end
-  end
+  on_mined_entity(self, event.entity, event.buffer)
 end
 
 function BaseEditor:on_robot_mined_entity(event)
-  local entity = event.entity
-  local surface = entity.surface
-  if self:is_valid_aboveground_surface(surface) then
-    local editor_entity = underground_counterpart_entity(self, entity)
-    if editor_entity then
-      return_contents_to_buffer(editor_entity, event.buffer)
-      editor_entity.destroy()
-    end
-  end
+  on_mined_entity(self, event.entity, event.buffer)
 end
 
 function BaseEditor:on_pre_ghost_deconstructed(event)
