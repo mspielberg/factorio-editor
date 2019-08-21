@@ -583,7 +583,7 @@ local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
   local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
   local create_entity_args = create_entity_args_for_ghost(ghost)
   create_entity_args.name = name
-  local editor_ghost = try_to_create_ghost(editor_surface, create_entity_args)
+  local editor_ghost = editor_surface and try_to_create_ghost(editor_surface, create_entity_args)
   if not editor_ghost then
     -- position was blocked in editor
     ghost.destroy()
