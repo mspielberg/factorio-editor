@@ -288,6 +288,13 @@ local function get_all_item_counts(control)
       end
     end
   end
+
+  local cursor_stack = control.cursor_stack
+  if cursor_stack and cursor_stack.valid_for_read then
+    local name = cursor_stack.name
+    out[name] = (out[name] or 0) + cursor_stack.count
+  end
+
   return out
 end
 
