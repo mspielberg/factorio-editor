@@ -473,10 +473,6 @@ end
 
 local function on_player_built_underground_entity(self, player_index, entity, stack)
   local state = self.player_state[player_index]
-  local character = state and state.character
-  if character then
-    character.remove_item(stack)
-  end
 
   -- look for bpproxy ghost on the surface
   local surface = self:aboveground_surface_for_editor_surface(entity.surface)
