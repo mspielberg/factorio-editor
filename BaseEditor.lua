@@ -357,6 +357,7 @@ end
 
 local transport_line_counts = {
   ["loader"] = 2,
+  ["loader-1x1"] = 2,
   ["splitter"] = 8,
   ["transport-belt"] = 2,
   ["underground-belt"] = 4,
@@ -506,7 +507,7 @@ local function create_editor_entity(self, bpproxy)
   }
   if type == "underground-belt" then
     create_args.type = bpproxy.belt_to_ground_type
-  elseif type == "loader" then
+  elseif type:find("^loader") then
     create_args.type = bpproxy.loader_type
   end
 
@@ -557,7 +558,7 @@ local function create_entity_args_for_ghost(ghost)
   }
   if ghost.ghost_type == "underground-belt" then
     create_entity_args.type = ghost.belt_to_ground_type
-  elseif ghost.ghost_type == "loader" then
+  elseif ghost.ghost_type:find("^loader") then
     create_entity_args.type = ghost.loader_type
   end
   return create_entity_args
@@ -843,7 +844,7 @@ local function create_deconstruction_proxy(self, entity, player)
   }
   if entity.type == "underground-belt" then
     args.type = entity.belt_to_ground_type
-  elseif entity.type == "loader" then
+  elseif entity.type:find("^loader") then
     args.type = entity.loader_type
   end
 
@@ -940,7 +941,7 @@ local function create_upgrade_proxy(self, entity, target, force)
   }
   if entity.type == "underground-belt" then
     args.type = entity.belt_to_ground_type
-  elseif entity.type == "loader" then
+  elseif entity.type:find("^loader") then
     args.type = entity.loader_type
   end
   local bpproxy_entity = surface.create_entity(args)
