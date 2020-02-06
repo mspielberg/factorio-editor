@@ -1148,6 +1148,28 @@ function BaseEditor:on_configuration_changed(data)
   end
 end
 
+function BaseEditor:on_script_raised_built(event)
+  local entity = event.entity
+  if nonproxy_name(self, entity.name) then
+    on_built_bpproxy(self, nil, entity, nil)
+  end
+end
+
+function BaseEditor:on_script_raised_destroy(event)
+  local entity = event.entity
+  if entity.name == "entity-ghost" then
+    return on_player_mined_ghost(self, entity)
+  end
+  on_mined_entity(self, entity, nil)
+end
+
+function BaseEditor:on_script_raised_revive(event)
+  local entity = event.entity
+  if nonproxy_name(self, entity.name) then
+    on_built_bpproxy(self, nil, entity, nil)
+  end
+end
+
 function BaseEditor:on_tick(event)
   sync_connected_players_inventories(self)
 end
