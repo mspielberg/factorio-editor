@@ -164,13 +164,21 @@ local function is_item_prototype_valid_for_editor(self, item_prototype)
   local is_valid = _is_item_prototype_valid_for_editor_cache[item_prototype]
   if is_valid == nil then
     is_valid = false
-    local place_result = item_prototype.place_result
-    local entity_type = place_result and place_result.type
-    if entity_type then
-      for _, valid_type in ipairs(self.valid_editor_types) do
-        if entity_type == valid_type then
-          is_valid = true
-          break
+    for _, valid_type in ipairs(self.valid_editor_types) do
+      if item_prototype.type == valid_type then
+        is_valid = true
+        break
+      end
+    end
+    if not is_valid then
+      local place_result = item_prototype.place_result
+      local entity_type = place_result and place_result.type
+      if entity_type then
+        for _, valid_type in ipairs(self.valid_editor_types) do
+          if entity_type == valid_type then
+            is_valid = true
+            break
+          end
         end
       end
     end
