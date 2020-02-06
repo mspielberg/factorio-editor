@@ -1133,7 +1133,7 @@ function BaseEditor:on_put_item(event)
   local player = game.players[event.player_index]
   local stack = player.cursor_stack
   player_placing_blueprint_with_bpproxy = false
-  if stack.valid_for_read and stack.is_blueprint and stack.is_blueprint_setup() then
+  if stack.valid_for_read and (stack.is_blueprint or stack.is_blueprint_book) then
     on_player_placing_blueprint(self, event.player_index, stack)
   end
 end
