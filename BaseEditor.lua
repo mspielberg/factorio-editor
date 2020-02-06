@@ -20,6 +20,7 @@ end
 function BaseEditor:is_valid_aboveground_surface(surface)
   return false
     or surface.name == "nauvis"            -- base
+    or surface.name == "oarc"              -- oarc-mod
     or surface.name == "Game"              -- TeamCoop
     or surface.name:match("^Nauvis plus ") -- NewGamePlus
     or is_se_planet_or_moon(surface)       -- space-exploration
