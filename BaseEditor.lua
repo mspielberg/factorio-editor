@@ -431,20 +431,24 @@ end
 ---------------------------------------------------------------------------------------------------
 -- ghost handling
 
-local function proxy_name(self, name)
-  return self.proxy_prefix..name
+function BaseEditor:proxy_name(entity)
+  if entity.type == "entity-ghost" then
+    return self.proxy_prefix..entity.ghost_name
+  end
+  return self.proxy_prefix..entity.name
 end
 
-local function nonproxy_name(self, name)
+function BaseEditor:nonproxy_name(entity)
   local prefix = self.proxy_prefix
+  local name = entity.name
   if name:sub(1, #prefix) ~= prefix then
     return nil
   end
   return name:sub(#prefix+1)
 end
 
-local function has_proxy(self, name)
-  return game.entity_prototypes[proxy_name(self, name)] ~= nil
+local function has_proxy(self, entity)
+  return game.entity_prototypes[self:proxy_name(entity)] ~= nil
 end
 
 --- Inserts stack into character's inventory or spills it at the character's position.
@@ -487,7 +491,7 @@ local function on_player_built_underground_entity(self, player_index, entity, st
   -- look for bpproxy ghost on the surface
   local surface = self:aboveground_surface_for_editor_surface(entity.surface)
   local bpproxy_ghosts = surface.find_entities_filtered{
-    ghost_name = proxy_name(self, entity.name),
+    ghost_name = self:proxy_name(entity),
     position = entity.position,
   }
   for _, bpproxy_ghost in ipairs(bpproxy_ghosts) do
@@ -501,7 +505,7 @@ local function create_editor_entity(self, bpproxy)
   local position = bpproxy.position
   local type = bpproxy.type
   local create_args = {
-    name = nonproxy_name(self, bpproxy.name),
+    name = self:nonproxy_name(bpproxy),
     position = position,
     force = bpproxy.force,
     direction = bpproxy.direction,
@@ -607,8 +611,7 @@ local function on_player_built_underground_ghost(self, ghost)
   local editor_surface = ghost.surface
   local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_surface)
   local create_entity_args = create_entity_args_for_ghost(ghost)
-  local proxy = ghost.ghost_name
-  local nonproxy = nonproxy_name(self, proxy)
+  local nonproxy = self:nonproxy_name(ghost)
 
   if nonproxy then
     -- this is a bpproxy ghost, move it above ground and create regular ghost in editor
@@ -618,7 +621,7 @@ local function on_player_built_underground_ghost(self, ghost)
     local editor_ghost = try_to_create_ghost(editor_surface, create_entity_args)
     if editor_ghost then
       -- succeeded creating editor ghost, so create matching bpproxy ghost above ground
-      create_entity_args.name = proxy
+      create_entity_args.name = ghost.ghost_name
       try_to_create_ghost(aboveground_surface, create_entity_args)
     end
     ghost.destroy()
@@ -626,9 +629,9 @@ local function on_player_built_underground_ghost(self, ghost)
     -- regular ghost in editor, force to be regular ghost above ground
     try_to_create_ghost(aboveground_surface, create_entity_args)
     ghost.destroy()
-  elseif has_proxy(self, ghost.ghost_name) then
+  elseif has_proxy(self, ghost) then
     -- regular ghost in editor, create surface bpproxy ghost
-    create_entity_args.name = proxy_name(self, ghost.ghost_name)
+    create_entity_args.name = self:proxy_name(ghost)
     try_to_create_ghost(aboveground_surface, create_entity_args)
   else
     -- regular ghost in editor without a proxy, just clear it away
@@ -637,7 +640,7 @@ local function on_player_built_underground_ghost(self, ghost)
 end
 
 local function on_player_built_ghost(self, ghost)
-  local name = nonproxy_name(self, ghost.ghost_name)
+  local name = self:nonproxy_name(ghost)
   if self:is_editor_surface(ghost.surface) then
     return on_player_built_underground_ghost(self, ghost)
   elseif name then
@@ -654,10 +657,10 @@ local function counterpart_ghosts(self, ghost)
   }
   local out = {}
   local ghost_name = ghost.ghost_name
-  local nonproxy = nonproxy_name(self, ghost_name)
+  local nonproxy = self:nonproxy_name(ghost)
   for _, other_ghost in ipairs(ghosts) do
     if other_ghost.ghost_name == nonproxy
-       or nonproxy_name(self, other_ghost.ghost_name) == ghost_name then
+       or self:nonproxy_name(other_ghost) == ghost_name then
       out[#out+1] = other_ghost
     end
   end
@@ -674,7 +677,7 @@ local function on_player_placing_blueprint(self, player_index, bp)
   local bp_entities = bp.get_blueprint_entities()
   if not bp_entities then return end
   for _, bp_entity in pairs(bp_entities) do
-    if nonproxy_name(self, bp_entity.name) then
+    if self:nonproxy_name(bp_entity) then
       player_placing_blueprint_with_bpproxy = true
       return
     end
@@ -720,7 +723,7 @@ local function convert_bp_entities_to_bpproxies(self, bp_entities)
   local write_cursor = 1
   for read_cursor, bp_entity in ipairs(bp_entities) do
     bp_entities[read_cursor] = nil
-    local name_in_bp = proxy_name(self, bp_entity.name)
+    local name_in_bp = self:proxy_name(bp_entity)
     if game.entity_prototypes[name_in_bp] then
       bp_entity.name = name_in_bp
       bp_entity.entity_number = write_cursor
@@ -817,22 +820,21 @@ end
 -- deconstruction
 
 function BaseEditor:surface_counterpart_bpproxy(entity)
-  local name = entity.name
-  if not has_proxy(self, name) then return nil end
+  if not has_proxy(self, entity) then return nil end
   local aboveground_surface = self:aboveground_surface_for_editor_surface(entity.surface)
-  return aboveground_surface.find_entity(proxy_name(self, name), entity.position)
+  return aboveground_surface.find_entity(self:proxy_name(entity), entity.position)
 end
 
 local function underground_counterpart_entity(self, entity)
-  local name = nonproxy_name(self, entity.name)
+  local name = self:nonproxy_name(entity)
   if not name then return nil end
   local editor_surface = self:editor_surface_for_aboveground_surface(entity.surface)
   return editor_surface.find_entity(name, entity.position)
 end
 
 local function create_deconstruction_proxy(self, entity, player)
-  if not has_proxy(self, entity.name) then return end
-  local name = proxy_name(self, entity.name)
+  if not has_proxy(self, entity) then return end
+  local name = self:proxy_name(entity)
   local position = entity.position
   local surface = self:aboveground_surface_for_editor_surface(entity.surface)
   if surface.find_entity(name, position) then return end
@@ -908,12 +910,12 @@ function BaseEditor:order_underground_deconstruction(player, editor_surface, are
     if filter(entity) then
       if entity.name == "entity-ghost" then
         local ghosts = aboveground_surface.find_entities_filtered{
-          ghost_name = proxy_name(self, entity.name),
+          ghost_name = self:proxy_name(entity),
           position = entity.position,
         }
         if ghosts[1] then ghosts[1].destroy() end
         entity.destroy()
-      elseif has_proxy(self, entity.name) then
+      elseif has_proxy(self, entity) then
         local was_minable = entity.minable
         entity.minable = true
         -- This will fire an on_marked_for_deconstruction event, and that handler
@@ -932,10 +934,10 @@ end
 ---------------------------------------------------------------------------------------------------
 -- upgrade
 
-local function create_upgrade_proxy(self, entity, target, force)
+local function create_upgrade_proxy(self, entity, target, player)
   local surface = self:aboveground_surface_for_editor_surface(entity.surface)
   local args = {
-    name = proxy_name(self, entity.name),
+    name = self:proxy_name(entity),
     position = entity.position,
     direction = entity.direction,
     force = entity.force,
@@ -949,7 +951,7 @@ local function create_upgrade_proxy(self, entity, target, force)
   bpproxy_entity.destructible = false
   bpproxy_entity.order_upgrade{
     force = player and player.force or entity.force,
-    target = proxy_name(self, target.name),
+    target = self:proxy_name(target),
     player = player,
   }
 end
@@ -957,7 +959,7 @@ end
 local function on_cancelled_aboveground_upgrade(self, event)
   local player = event.player_index and game.players[event.player_index]
   local bpproxy = event.entity
-  local name = nonproxy_name(self, bpproxy.name)
+  local name = self:nonproxy_name(bpproxy)
   if not name then return end
 
   local editor_surface = self:editor_surface_for_aboveground_surface(bpproxy.surface)
@@ -971,8 +973,8 @@ end
 local function on_cancelled_editor_upgrade(self, event)
   local player = event.player_index and game.players[event.player_index]
   local editor_entity = event.entity
-  local name = proxy_name(self, editor_entity.name)
-  if not has_proxy(self, editor_entity.name) then return end
+  local name = self:proxy_name(editor_entity)
+  if not has_proxy(self, editor_entity) then return end
 
   local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_entity.surface)
   local bpproxy = aboveground_surface.find_entity(name, editor_entity.position)
@@ -1020,7 +1022,7 @@ function BaseEditor:on_built_entity(event)
 
   if self:is_editor_surface(surface) then
     on_player_built_underground_entity(self, player_index, entity, stack)
-  elseif nonproxy_name(self, entity.name) then
+  elseif self:nonproxy_name(entity) then
     on_built_bpproxy(self, player, entity, stack)
   end
 end
@@ -1036,11 +1038,18 @@ end
 
 function BaseEditor:on_marked_for_upgrade(event)
   local entity = event.entity
+  local type = entity.type
   local target_proto = event.target
   local player = event.player_index and game.players[event.player_index]
+  local fake_target_entity = {
+    name = target_proto.name,
+    type = type,
+    direction = entity.direction,
+    belt_to_ground_type = type == "underground-belt" and entity.belt_to_ground_type,
+  }
   if self:is_editor_surface(entity.surface)
-  and has_proxy(self, entity.name)
-  and has_proxy(self, target_proto.name) then
+  and has_proxy(self, entity)
+  and has_proxy(self, fake_target_entity) then
     create_upgrade_proxy(self, entity, event.target, player)
   end
 end
@@ -1107,7 +1116,7 @@ end
 
 function BaseEditor:on_robot_built_entity(event)
   local entity = event.created_entity
-  if nonproxy_name(self, entity.name) then
+  if self:nonproxy_name(entity) then
     on_built_bpproxy(self, event.robot, entity, event.stack)
   end
 end
@@ -1121,7 +1130,7 @@ end
 
 function BaseEditor:on_cancelled_deconstruction(event)
   local entity = event.entity
-  if nonproxy_name(self, entity.name) then
+  if self:nonproxy_name(entity) then
     local player = event.player_index and game.players[event.player_index]
     on_cancelled_bpproxy_deconstruction(self, entity, player)
   elseif self:is_editor_surface(entity.surface) then
@@ -1150,7 +1159,7 @@ end
 
 function BaseEditor:on_script_raised_built(event)
   local entity = event.entity
-  if nonproxy_name(self, entity.name) then
+  if self:nonproxy_name(entity) then
     on_built_bpproxy(self, nil, entity, nil)
   end
 end
@@ -1165,7 +1174,7 @@ end
 
 function BaseEditor:on_script_raised_revive(event)
   local entity = event.entity
-  if nonproxy_name(self, entity.name) then
+  if self:nonproxy_name(entity) then
     on_built_bpproxy(self, nil, entity, nil)
   end
 end
