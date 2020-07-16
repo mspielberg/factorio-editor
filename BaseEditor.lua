@@ -441,10 +441,24 @@ end
 function BaseEditor:nonproxy_name(entity)
   local prefix = self.proxy_prefix
   local name = entity.name
+  if name == "entity-ghost" then
+    name = name.ghost_name
+  end
   if name:sub(1, #prefix) ~= prefix then
     return nil
   end
   return name:sub(#prefix+1)
+end
+
+--- hello
+---@param bpproxy LuaEntity Either a bpproxy or a bpproxy ghost
+function BaseEditor:create_entity_args_for_editor_entity(bpproxy)
+  return {
+    name = self:nonproxy_name(bpproxy),
+    position = bpproxy.position,
+    force = bpproxy.force,
+    player = bpproxy.last_user,
+  }
 end
 
 local function has_proxy(self, entity)
@@ -502,20 +516,7 @@ end
 local function create_editor_entity(self, bpproxy)
   local editor_surface = self:editor_surface_for_aboveground_surface(bpproxy.surface)
   if not editor_surface then return end
-  local position = bpproxy.position
-  local type = bpproxy.type
-  local create_args = {
-    name = self:nonproxy_name(bpproxy),
-    position = position,
-    force = bpproxy.force,
-    direction = bpproxy.direction,
-  }
-  if type == "underground-belt" then
-    create_args.type = bpproxy.belt_to_ground_type
-  elseif type:find("^loader") then
-    create_args.type = bpproxy.loader_type
-  end
-
+  local create_args = self:create_entity_args_for_editor_entity(bpproxy)
   return editor_surface.create_entity(create_args)
 end
 
@@ -553,52 +554,26 @@ end
 
 local player_placing_blueprint_with_bpproxy
 
-local function create_entity_args_for_ghost(ghost)
-  local create_entity_args = {
-    name = ghost.ghost_name,
-    position = ghost.position,
-    force = ghost.force,
-    direction = ghost.direction,
-    last_user = ghost.last_user,
-  }
-  if ghost.ghost_type == "underground-belt" then
-    create_entity_args.type = ghost.belt_to_ground_type
-  elseif ghost.ghost_type:find("^loader") then
-    create_entity_args.type = ghost.loader_type
-  end
-  return create_entity_args
-end
-
 local function try_to_create_ghost(surface, create_entity_args)
   local entity_name = create_entity_args.name
-  local last_user = create_entity_args.last_user
-  local args = {
-    name = entity_name,
-    position = create_entity_args.position,
-    direction = create_entity_args.direction,
-    force = create_entity_args.force,
-    type = create_entity_args.type,
-    build_check_type = defines.build_check_type.ghost_place,
-  }
+  create_entity_args.build_check_type = defines.build_check_type.ghost_place
 
-  if not surface.can_place_entity(args) then
+  if not surface.can_place_entity(create_entity_args) then
     return nil
   end
 
-  args.name = "entity-ghost"
-  args.inner_name = entity_name
-  args.build_check_type = nil
+  create_entity_args.name = "entity-ghost"
+  create_entity_args.inner_name = entity_name
+  create_entity_args.build_check_type = nil
 
-  local ghost = surface.create_entity(args)
-  ghost.last_user = last_user
-
+  local ghost = surface.create_entity(create_entity_args)
   return ghost
 end
 
 -- converts overworld bpproxy ghost to regular ghost underground
 local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
   local editor_surface = self:editor_surface_for_aboveground_surface(ghost.surface)
-  local create_entity_args = create_entity_args_for_ghost(ghost)
+  local create_entity_args = self:create_entity_args_for_editor_entity(ghost)
   create_entity_args.name = name
   local editor_ghost = editor_surface and try_to_create_ghost(editor_surface, create_entity_args)
   if not editor_ghost then
@@ -607,26 +582,24 @@ local function on_player_built_surface_bpproxy_ghost(self, ghost, name)
   end
 end
 
-local function on_player_built_underground_ghost(self, ghost)
+local function on_player_built_underground_ghost(self, ghost, name)
   local editor_surface = ghost.surface
   local aboveground_surface = self:aboveground_surface_for_editor_surface(editor_surface)
-  local create_entity_args = create_entity_args_for_ghost(ghost)
-  local nonproxy = self:nonproxy_name(ghost)
+  local create_entity_args = self:create_entity_args_for_editor_entity(ghost)
 
-  if nonproxy then
+  if name then
     -- this is a bpproxy ghost, move it above ground and create regular ghost in editor
     ghost.destroy()
     -- try to create editor ghost first, since it has a collision_mask
-    create_entity_args.name = nonproxy
     local editor_ghost = try_to_create_ghost(editor_surface, create_entity_args)
     if editor_ghost then
       -- succeeded creating editor ghost, so create matching bpproxy ghost above ground
       create_entity_args.name = ghost.ghost_name
       try_to_create_ghost(aboveground_surface, create_entity_args)
     end
-    ghost.destroy()
   elseif player_placing_blueprint_with_bpproxy then
     -- regular ghost in editor, force to be regular ghost above ground
+    create_entity_args.name = ghost.ghost_name
     try_to_create_ghost(aboveground_surface, create_entity_args)
     ghost.destroy()
   elseif has_proxy(self, ghost) then
@@ -642,7 +615,7 @@ end
 local function on_player_built_ghost(self, ghost)
   local name = self:nonproxy_name(ghost)
   if self:is_editor_surface(ghost.surface) then
-    return on_player_built_underground_ghost(self, ghost)
+    return on_player_built_underground_ghost(self, ghost, name)
   elseif name then
     return on_player_built_surface_bpproxy_ghost(self, ghost, name)
   end
@@ -839,20 +812,15 @@ local function create_deconstruction_proxy(self, entity, player)
   local surface = self:aboveground_surface_for_editor_surface(entity.surface)
   if surface.find_entity(name, position) then return end
 
-  local args = {
+  local bpproxy_entity = surface.create_entity{
     name = name,
     position = position,
     direction = entity.direction,
     force = entity.force,
+    player = player,
   }
-  if entity.type == "underground-belt" then
-    args.type = entity.belt_to_ground_type
-  elseif entity.type:find("^loader") then
-    args.type = entity.loader_type
-  end
-
-  local bpproxy_entity = surface.create_entity(args)
   bpproxy_entity.destructible = false
+  bpproxy_entity.operable = false
   bpproxy_entity.order_deconstruction(player.force, player)
 end
 
@@ -941,12 +909,8 @@ local function create_upgrade_proxy(self, entity, target, player)
     position = entity.position,
     direction = entity.direction,
     force = entity.force,
+    player = player,
   }
-  if entity.type == "underground-belt" then
-    args.type = entity.belt_to_ground_type
-  elseif entity.type:find("^loader") then
-    args.type = entity.loader_type
-  end
   local bpproxy_entity = surface.create_entity(args)
   bpproxy_entity.destructible = false
   bpproxy_entity.order_upgrade{
