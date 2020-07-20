@@ -450,7 +450,6 @@ function BaseEditor:nonproxy_name(entity)
   return name:sub(#prefix+1)
 end
 
---- hello
 ---@param bpproxy LuaEntity Either a bpproxy or a bpproxy ghost
 function BaseEditor:create_entity_args_for_editor_entity(bpproxy)
   return {
@@ -692,11 +691,12 @@ local function bp_position_transforms(bp_entities, surface, area)
   return bp_to_world, world_to_bp
 end
 
-local function convert_bp_entities_to_bpproxies(self, bp_entities)
+local function convert_bp_entities_to_bpproxies(self, bp_entities, editor_surface, editor_bp_to_world)
   local write_cursor = 1
   for read_cursor, bp_entity in ipairs(bp_entities) do
     bp_entities[read_cursor] = nil
-    local name_in_bp = self:proxy_name(bp_entity)
+    local entity = editor_surface.find_entity(bp_entity.name, editor_bp_to_world(bp_entity.position))
+    local name_in_bp = self:proxy_name(entity)
     if game.entity_prototypes[name_in_bp] then
       bp_entity.name = name_in_bp
       bp_entity.entity_number = write_cursor
@@ -768,7 +768,7 @@ function BaseEditor:capture_underground_entities_in_blueprint(event)
   local editor_bp_to_world, editor_world_to_bp =
     bp_position_transforms(editor_bp_entities, editor_surface, area)
 
-  convert_bp_entities_to_bpproxies(self, editor_bp_entities)
+  convert_bp_entities_to_bpproxies(self, editor_bp_entities, editor_surface, editor_bp_to_world)
 
   -- merge entities from both blueprints
   if next(aboveground_bp_entities) and next(editor_bp_entities) then
