@@ -1102,12 +1102,25 @@ function BaseEditor:on_cancelled_deconstruction(event)
   end
 end
 
+local function get_blueprint(stack)
+  if not stack or not stack.valid_for_read then return nil end
+  if stack.is_blueprint and stack.is_blueprint_setup() then
+    return stack
+  end
+  if stack.is_blueprint_book and stack.active_index then
+    stack = stack.get_inventory(defines.inventory.item_main)[stack.active_index]
+    return get_blueprint(stack)
+  end
+  return nil
+end
+
 function BaseEditor:on_put_item(event)
   local player = game.players[event.player_index]
   local stack = player.cursor_stack
-  player_placing_blueprint_with_bpproxy = false
-  if stack.valid_for_read and (stack.is_blueprint or stack.is_blueprint_book) then
-    on_player_placing_blueprint(self, event.player_index, stack)
+  local bp = get_blueprint(stack)
+  if bp then
+    player_placing_blueprint_with_bpproxy = false
+    on_player_placing_blueprint(self, event.player_index, bp)
   end
 end
 
