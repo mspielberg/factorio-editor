@@ -842,8 +842,17 @@ end
 
 local function create_entity_filter(tool)
   if not (tool and tool.valid_for_read and tool.is_deconstruction_item) then
-    return function(entity) return true end
+    return function(_) return true end
   end
+
+  if tool.trees_and_rocks_only then
+    if tool.entity_filter_mode == defines.deconstruction_item.entity_filter_mode.whitelist then
+      return function(_) return false end
+    else
+      return function(_) return true end
+    end
+  end
+
   local set = {}
   for _, item in pairs(tool.entity_filters) do
     set[item] = true
