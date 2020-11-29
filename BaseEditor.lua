@@ -384,7 +384,7 @@ end
 -- player/character handling
 
 local function move_player_to_editor(self, player)
-  local success = player.clean_cursor()
+  local success = player.clear_cursor()
   if not success then return end
   local player_index = player.index
   local position = player.position
@@ -1123,7 +1123,7 @@ local function get_blueprint(stack)
   return nil
 end
 
-function BaseEditor:on_put_item(event)
+function BaseEditor:on_pre_build(event)
   local player = game.players[event.player_index]
   local stack = player.cursor_stack
   local bp = get_blueprint(stack)
