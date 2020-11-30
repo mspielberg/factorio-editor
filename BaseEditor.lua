@@ -442,7 +442,7 @@ function BaseEditor:nonproxy_name(entity)
   local prefix = self.proxy_prefix
   local name = entity.name
   if name == "entity-ghost" then
-    name = name.ghost_name
+    name = entity.ghost_name
   end
   if name:sub(1, #prefix) ~= prefix then
     return nil
