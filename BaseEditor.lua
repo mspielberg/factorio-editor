@@ -450,6 +450,10 @@ function BaseEditor:nonproxy_name(entity)
   return name:sub(#prefix+1)
 end
 
+function BaseEditor:upgrade_name(entity_to_upgrade, target_proto)
+  return target_proto.name
+end
+
 ---@param bpproxy LuaEntity Either a bpproxy or a bpproxy ghost
 function BaseEditor:create_entity_args_for_editor_entity(bpproxy)
   return {
@@ -924,7 +928,7 @@ local function create_upgrade_proxy(self, entity, target, player)
   bpproxy_entity.destructible = false
   bpproxy_entity.order_upgrade{
     force = player and player.force or entity.force,
-    target = self:proxy_name(target),
+    target = self:upgrade_name(entity, target),
     player = player,
   }
 end
