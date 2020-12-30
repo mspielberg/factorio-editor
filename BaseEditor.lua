@@ -1170,6 +1170,7 @@ function BaseEditor:on_script_raised_revive(event)
 end
 
 function BaseEditor:on_tick(event)
+  player_placing_blueprint_with_bpproxy = false
   sync_connected_players_inventories(self)
 end
 
