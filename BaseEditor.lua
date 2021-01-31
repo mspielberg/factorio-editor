@@ -1076,7 +1076,9 @@ function BaseEditor:on_robot_mined_entity(event)
 end
 
 function BaseEditor:on_pre_ghost_deconstructed(event)
-  on_player_mined_ghost(self, event.ghost)
+  if event.ghost.type == "entity-ghost" then
+    on_player_mined_ghost(self, event.ghost)
+  end
 end
 
 function BaseEditor:on_pre_player_mined_item(event)
